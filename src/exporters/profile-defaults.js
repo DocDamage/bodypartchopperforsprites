@@ -6,3 +6,22 @@ export const DEFAULT_PROFILES = Object.freeze({
   keter: { id: 'keter', name: 'KeterEngine JSON', folder: 'keter/frames/{row}', file: '{base}_{row}_{col}', manifest: 'keter_atlas.json', pivotFormat: 'pixels', scale: 1, folderByRow: true },
   lpc: { id: 'lpc', name: 'Universal LPC Style', folder: 'lpc/{row}', file: '{row}_{col}', manifest: 'lpc_layer_manifest.json', pivotFormat: 'pixels', scale: 1, folderByRow: true }
 });
+
+export function getProfile(profiles, profileId) {
+  return profiles && profiles[profileId] ? profiles[profileId] : DEFAULT_PROFILES.generic;
+}
+
+export function resolvePathTemplate(template, context = {}) {
+  return String(template)
+    .replace(/\{base\}/g, context.base || '')
+    .replace(/\{row\}/g, context.row || '')
+    .replace(/\{col\}/g, context.col || '')
+    .replace(/\{direction\}/g, context.direction || context.row || '')
+    .replace(/\{animation\}/g, context.animation || context.row || '');
+}
+
+export function resolveProfilePath(profile, context = {}) {
+  const folder = resolvePathTemplate(profile.folder || 'frames/{row}', context);
+  const file = `${resolvePathTemplate(profile.file || '{base}_{row}_{col}', context)}.png`;
+  return `${folder}/${file}`;
+}
