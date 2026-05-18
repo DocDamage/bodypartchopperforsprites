@@ -1,5 +1,5 @@
-import { APP_VERSION, PROJECT_FORMAT_VERSION } from '../src/core/constants.js';
-import { createRuntimeShell, attachRuntimeShell, patchLegacyBrand, bootRuntimeShell } from '../src/browser/runtime-shell.js';
+import { APP_VERSION, PROJECT_FORMAT_VERSION, STORAGE_KEYS } from '../src/core/constants.js';
+import { createRuntimeShell, attachRuntimeShell, patchLegacyBrand, bootRuntimeShell, syncShellLibraryStorage } from '../src/browser/runtime-shell.js';
 
 function assert(condition, message) {
   if (!condition) {
@@ -41,6 +41,8 @@ assert(shell.plugins.some((plugin) => plugin.id === 'exporter.runtime_bundle'), 
 assert(shell.state.version === APP_VERSION, 'runtime shell creates default v7 state');
 assert(shell.storageBridge.available === false, 'runtime shell creates unavailable storage bridge without browser storage');
 assert(shell.storageStatus.available === false, 'runtime shell exposes unavailable storage status without browser storage');
+assert(shell.libraryStorageAdapter.available === false, 'runtime shell creates unavailable library adapter without browser storage');
+assert(shell.libraryStorageStatus.available === false, 'runtime shell exposes unavailable library status without browser storage');
 
 const memoryStorage = createMemoryStorage();
 const storageTarget = { localStorage: memoryStorage };
@@ -49,6 +51,13 @@ storageShell.storageBridge.saveLibrary([{ id: 'asset_1', name: 'Ronin Hair' }]);
 assert(storageShell.storageBridge.available === true, 'runtime shell creates storage bridge from target localStorage');
 assert(storageShell.storageBridge.loadLibrary()[0].id === 'asset_1', 'runtime shell storage bridge can access library storage');
 assert(storageShell.storageStatus.available === true, 'runtime shell exposes available storage status from target storage');
+assert(storageShell.libraryStorageAdapter.available === true, 'runtime shell creates library adapter from target localStorage');
+assert(storageShell.libraryStorageStatus.available === true, 'runtime shell exposes available library status from target storage');
+
+storageTarget.localStorage.setItem(STORAGE_KEYS.legacyLibraryV6, JSON.stringify([{ id: 'legacy_asset', name: 'Legacy Hair' }]));
+const syncedStatus = syncShellLibraryStorage(storageShell);
+assert(syncedStatus.legacyAssets === 1, 'syncShellLibraryStorage reports legacy assets after sync');
+assert(JSON.parse(storageTarget.localStorage.getItem(STORAGE_KEYS.library))[0].id === 'legacy_asset', 'syncShellLibraryStorage writes canonical library data');
 
 const target = {};
 attachRuntimeShell(target, shell);
@@ -61,9 +70,13 @@ assert(fakeDocument.nodes['.brand-block strong'].innerHTML.includes('v7'), 'patc
 assert(fakeDocument.nodes['.brand-block em'].textContent.includes('V7'), 'patchLegacyBrand updates subtitle');
 
 const bootTarget = { document: createFakeDocument(), localStorage: createMemoryStorage() };
+bootTarget.localStorage.setItem(STORAGE_KEYS.legacyLibraryV6, JSON.stringify([{ id: 'boot_asset', name: 'Boot Hair' }]));
 const booted = bootRuntimeShell({ target: bootTarget, documentRef: bootTarget.document, legacyRuntime: true });
 assert(bootTarget.DocSpriteSlicerV7 === booted, 'bootRuntimeShell attaches shell');
 assert(bootTarget.DocSpriteSlicerV7.storageBridge.available === true, 'bootRuntimeShell attaches shell with storage bridge');
+assert(bootTarget.DocSpriteSlicerV7.libraryStorageAdapter.available === true, 'bootRuntimeShell attaches shell with library adapter');
+assert(bootTarget.DocSpriteSlicerV7.libraryStorageStatus.legacyAssets === 1, 'bootRuntimeShell syncs legacy library into library status');
+assert(JSON.parse(bootTarget.localStorage.getItem(STORAGE_KEYS.library))[0].id === 'boot_asset', 'bootRuntimeShell syncs legacy library into canonical key');
 assert(bootTarget.document.title === 'Doc Sprite Slicer Studio v7', 'bootRuntimeShell patches document');
 
 if (process.exitCode) process.exit(process.exitCode);
