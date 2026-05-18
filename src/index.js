@@ -17,3 +17,7 @@ export * from './validators/diagnostics.js';
 export * from './validators/project-integrity.js';
 export * from './validators/visual-diff.js';
 export * from './validators/timeline.js';
+export * from './labs/timeline-lab.js';
+export * from './labs/pose-lab.js';
+export * from './labs/remap-lab.js';
+export * from './labs/atlas-lab.js';
