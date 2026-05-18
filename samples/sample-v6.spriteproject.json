@@ -1,0 +1,105 @@
+{
+  "type": "doc_sprite_slicer_studio_project",
+  "version": "6.0.0",
+  "projectFormatVersion": 6,
+  "savedAt": "2026-05-18T00:00:00.000Z",
+  "source": {
+    "name": "sample_4_direction_idle.png",
+    "width": 256,
+    "height": 256
+  },
+  "grid": {
+    "cols": 4,
+    "rows": 4,
+    "frameW": 64,
+    "frameH": 64,
+    "marginX": 0,
+    "marginY": 0,
+    "spacingX": 0,
+    "spacingY": 0,
+    "rowLabels": ["idle_up", "idle_left", "idle_down", "idle_right"],
+    "directionLabels": ["up", "left", "down", "right"],
+    "baseName": "sample_idle"
+  },
+  "export": {
+    "profileId": "generic",
+    "scale": 1,
+    "smoothing": false,
+    "folderByRow": true,
+    "includeSource": false,
+    "includeCredits": true
+  },
+  "qa": {
+    "blockFailures": true,
+    "allowWarnings": true,
+    "diagnostics": [],
+    "lastRun": null
+  },
+  "parts": [
+    {
+      "id": "part_head_sample",
+      "name": "head",
+      "category": "heads",
+      "type": "rect",
+      "frame": { "row": 2, "col": 0 },
+      "rect": { "x": 22, "y": 6, "w": 20, "h": 18 },
+      "underlap": 2,
+      "notes": "Starter sample only. Replace with a real source sheet."
+    }
+  ],
+  "pivots": [
+    {
+      "id": "pivot_root_sample",
+      "name": "root",
+      "kind": "root",
+      "frame": { "row": 2, "col": 0 },
+      "x": 32,
+      "y": 58
+    }
+  ],
+  "library": [],
+  "includeLibrary": false,
+  "recipe": {
+    "id": "sample_character",
+    "name": "Sample Character",
+    "base": "",
+    "layers": [],
+    "palette": "",
+    "exportProfile": "generic",
+    "directionOrderOverrides": {},
+    "notes": "Minimal sample project for schema smoke tests."
+  },
+  "batch": [],
+  "batchLogs": [],
+  "profiles": {},
+  "credits": [],
+  "palette": [],
+  "pluginsEnabled": {
+    "importer.generic_spritesheet": true,
+    "exporter.generic_png_json": true,
+    "validator.project_integrity": true,
+    "anim.timeline_lab": true,
+    "rig.pose_lab": true,
+    "exporter.runtime_bundle": true,
+    "remapper.sheet_layout": true
+  },
+  "timeline": {
+    "clips": [
+      {
+        "id": "clip_idle_down_sample",
+        "name": "idle_down",
+        "row": 2,
+        "fps": 8,
+        "frames": [0, 1, 2, 3]
+      }
+    ],
+    "selectedClipId": "clip_idle_down_sample",
+    "onionSkin": { "enabled": false, "prev": 1, "next": 1, "opacity": 0.24 }
+  },
+  "poseLibrary": [],
+  "posePreview": { "transforms": {} },
+  "remap": { "target": "godot_folders", "plan": [] },
+  "atlas": { "name": "sample_idle_atlas", "padding": 2, "maxWidth": 1024, "frames": [], "manifest": null },
+  "runtimeBundle": { "lastBuilt": null },
+  "migrationReport": []
+}
