@@ -1,0 +1,61 @@
+{
+  "type": "doc_sprite_slicer_studio_project",
+  "version": "5.0.0",
+  "projectFormatVersion": 5,
+  "source": {
+    "name": "sample.png",
+    "width": 256,
+    "height": 256
+  },
+  "grid": {
+    "cols": 4,
+    "rows": 4,
+    "frameW": 64,
+    "frameH": 64,
+    "marginX": 0,
+    "marginY": 0,
+    "spacingX": 0,
+    "spacingY": 0,
+    "rowLabels": [
+      "idle_up",
+      "idle_left",
+      "idle_down",
+      "idle_right"
+    ],
+    "directionLabels": [
+      "up",
+      "left",
+      "down",
+      "right"
+    ],
+    "baseName": "sample"
+  },
+  "export": {
+    "profileId": "generic",
+    "scale": 1,
+    "smoothing": false,
+    "folderByRow": true,
+    "includeSource": true,
+    "includeCredits": true
+  },
+  "qa": {
+    "blockFailures": true,
+    "allowWarnings": true,
+    "diagnostics": [],
+    "lastRun": null
+  },
+  "parts": [],
+  "pivots": [],
+  "layers": [],
+  "library": [],
+  "recipe": {
+    "id": "sample_character",
+    "name": "Sample Character",
+    "layers": []
+  },
+  "batch": [],
+  "batchLogs": [],
+  "profiles": {},
+  "pluginsEnabled": {},
+  "migrationReport": []
+}

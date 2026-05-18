@@ -1,0 +1,13 @@
+{
+  "type": "doc_sprite_slicer_studio_project",
+  "version": "4.0.0",
+  "source": {"name": "example_sheet.png", "width": 832, "height": 1344},
+  "grid": {"cols": 13, "rows": 21, "frameW": 64, "frameH": 64, "marginX": 0, "marginY": 0, "spacingX": 0, "spacingY": 0, "rowLabels": ["spellcast_up", "spellcast_left", "spellcast_down", "spellcast_right"], "directionLabels": ["up", "left", "down", "right"], "baseName": "example"},
+  "parts": [],
+  "pivots": [],
+  "library": [],
+  "recipe": {"id": "example_character", "name": "Example Character", "layers": [], "exportProfile": "godot4"},
+  "batch": [],
+  "profiles": {},
+  "qa": {"blockFailures": true, "allowWarnings": true, "diagnostics": []}
+}

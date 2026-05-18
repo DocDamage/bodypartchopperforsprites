@@ -1,0 +1,8 @@
+{
+  "generic": {"name":"Generic PNG + JSON","folder":"frames/{row}","manifest":"manifest.json"},
+  "godot4": {"name":"Godot 4 AnimatedSprite2D","folder":"godot/animations/{row}","manifest":"godot_animations.json"},
+  "unity2d": {"name":"Unity 2D","folder":"unity/sprites/{row}","manifest":"unity_sprite_manifest.json"},
+  "rpgmz": {"name":"RPG Maker MZ","folder":"rpgmaker_mz/{row}","manifest":"rpgmaker_mz_notes.json"},
+  "keter": {"name":"KeterEngine JSON","folder":"keter/frames/{row}","manifest":"keter_atlas.json"},
+  "lpc": {"name":"Universal LPC Style","folder":"lpc/{row}","manifest":"lpc_layer_manifest.json"}
+}

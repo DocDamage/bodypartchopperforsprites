@@ -1,0 +1,14 @@
+{
+  "frameSize": 64,
+  "framesPerRow": 13,
+  "directions": ["up", "left", "down", "right"],
+  "animations": {
+    "spellcast": {"row": 0, "rows": 4, "cycle": [0,1,2,3,4,5,6]},
+    "thrust": {"row": 4, "rows": 4, "cycle": [0,1,2,3,4,5,6,7]},
+    "walk": {"row": 8, "rows": 4, "cycle": [1,2,3,4,5,6,7,8]},
+    "slash": {"row": 12, "rows": 4, "cycle": [0,1,2,3,4,5]},
+    "shoot": {"row": 16, "rows": 4, "cycle": [0,1,2,3,4,5,6,7,8,9,10,11,12]},
+    "idle": {"row": 22, "rows": 4, "cycle": [0,0,1]},
+    "run": {"row": 38, "rows": 4, "cycle": [0,1,2,3,4,5,6,7]}
+  }
+}

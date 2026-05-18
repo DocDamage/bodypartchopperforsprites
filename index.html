@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Doc Sprite Slicer Studio v5</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <input id="imageInput" type="file" accept="image/png,image/webp,image/jpeg" hidden />
+  <input id="projectInput" type="file" accept="application/json,.json,.spriteproject" hidden />
+  <input id="assetImageInput" type="file" accept="image/png,image/webp,image/jpeg" multiple hidden />
+  <input id="batchInput" type="file" accept="image/png,image/webp,image/jpeg" multiple hidden />
+  <input id="libraryImportInput" type="file" accept="application/json,.json" hidden />
+  <input id="assetPackInput" type="file" accept="image/png,image/webp,image/jpeg,application/json,.json,text/csv,.csv" multiple hidden />
+
+  <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
+  <div id="toastStack" class="toast-stack" aria-live="polite"></div>
+
+  <div id="commandPalette" class="command-palette" hidden>
+    <div class="command-card">
+      <div class="command-header">
+        <strong>Command Palette</strong>
+        <span>Ctrl+K</span>
+      </div>
+      <input id="commandSearch" type="search" placeholder="Type a command: Detect Grid, Save Part as Asset, Export Workspace…" autocomplete="off" />
+      <div id="commandResults" class="command-results" role="listbox"></div>
+    </div>
+  </div>
+
+  <nav class="menu-bar" aria-label="Application menu">
+    <div class="brand-block">
+      <strong>Doc Sprite Slicer Studio <span>v5</span></strong>
+      <em>Production hardening + plugin pipeline + release-candidate foundation</em>
+    </div>
+    <div class="menus">
+      <div class="menu" tabindex="0"><button class="menu-button">File</button><div class="menu-popover">
+        <button data-action="newProject" data-tip="Start a clean v4 project. This clears current source, parts, recipe, batch jobs, and diagnostics but keeps your local asset library.">New Project</button>
+        <button data-action="openImage" data-tip="Import the source spritesheet. PNG is preferred because transparency is preserved.">Import Spritesheet…</button>
+        <button data-action="openProject" data-tip="Open a .spriteproject.json file. V4 projects can restore source image data, grid settings, parts, pivots, recipes, QA gates, and profiles.">Open Project…</button>
+        <button data-action="saveProject" data-tip="Download the current project as a versioned .spriteproject.json file with embedded source image data if enabled.">Save Project</button>
+        <button data-action="recoverAutosave" data-tip="Recover the latest autosaved v4 project stored in this browser.">Recover Autosave</button>
+        <hr />
+        <button data-action="exportWorkspaceZip" data-tip="Export a complete production package: sliced frames, rig parts, asset metadata, recipe, QA report, credits, and engine manifests.">Export Workspace ZIP</button>
+        <button data-action="exportFramesZip" data-tip="Export only sliced frame PNGs using the current grid, labels, and export profile.">Export Frames ZIP</button>
+      </div></div>
+      <div class="menu" tabindex="0"><button class="menu-button">Edit</button><div class="menu-popover">
+        <button data-action="undo" data-tip="Undo the last project operation. Works for settings, parts, pivots, library metadata, recipe layers, and batch jobs.">Undo</button>
+        <button data-action="redo" data-tip="Redo the last undone operation.">Redo</button>
+        <hr />
+        <button data-action="copySettings" data-tip="Copy current grid, labels, export, and QA settings to the clipboard as JSON.">Copy Settings</button>
+        <button data-action="pasteSettings" data-tip="Paste settings JSON copied from this tool.">Paste Settings</button>
+        <button data-action="deleteSelection" data-tip="Delete the currently selected part, pivot, recipe layer, asset, or batch job.">Delete Selection</button>
+      </div></div>
+      <div class="menu" tabindex="0"><button class="menu-button">View</button><div class="menu-popover">
+        <button data-action="toggleGrid" data-tip="Show or hide frame grid lines over the spritesheet.">Toggle Grid</button>
+        <button data-action="toggleNumbers" data-tip="Show or hide frame numbers to verify slicing and naming before export.">Toggle Frame Numbers</button>
+        <button data-action="toggleBboxes" data-tip="Show or hide transparent-pixel bounding boxes for every frame.">Toggle Bounding Boxes</button>
+        <button data-action="togglePivots" data-tip="Show or hide pivots and sockets on the canvas.">Toggle Pivots</button>
+        <button data-action="toggleUnderlap" data-tip="Show underlap and seam-repair padding guides around selected rig parts.">Toggle Underlap Guides</button>
+        <hr />
+        <button data-action="zoomIn" data-tip="Zoom in on the canvas. Pixels stay nearest-neighbor crisp.">Zoom In</button>
+        <button data-action="zoomOut" data-tip="Zoom out on the canvas.">Zoom Out</button>
+        <button data-action="zoomFit" data-tip="Fit the current source image into the canvas viewport.">Fit to Canvas</button>
+      </div></div>
+      <div class="menu" tabindex="0"><button class="menu-button">Sheet</button><div class="menu-popover">
+        <button data-action="detectGrid" data-tip="Estimate frame size, columns, and rows from image dimensions. Manually adjust if the grid does not line up.">Detect Grid</button>
+        <button data-action="applyLpcPreset" data-tip="Apply Universal LPC defaults: 64px cells, 13 columns, and up/left/down/right row conventions.">Apply LPC Preset</button>
+        <button data-action="applyRpgMzPreset" data-tip="Apply RPG Maker MZ character-sheet defaults. Use this for classic MZ sheets.">Apply RPG Maker MZ Preset</button>
+        <button data-action="assignLpcRows" data-tip="Generate LPC-style animation and direction labels for full-sheet export.">Assign LPC Row Labels</button>
+        <button data-action="normalizeTransparency" data-tip="Turn low-alpha edge junk into full transparency. Use this after AI-generated or compressed art.">Normalize Transparency</button>
+      </div></div>
+      <div class="menu" tabindex="0"><button class="menu-button">Rig</button><div class="menu-popover">
+        <button data-action="addRectPart" data-tip="Draw a rectangle around a visible body part. Use this for fast rig-layer extraction.">Add Rect Part</button>
+        <button data-action="addPolygonPart" data-tip="Click pixel-snapped points around a body part. Double-click to finish. Use this for non-rectangular parts.">Add Polygon Part</button>
+        <button data-action="addHumanoidTemplate" data-tip="Create starter head, torso, arms, hands, legs/skirt, and feet regions for the selected frame.">Add Humanoid Starter Parts</button>
+        <button data-action="addPivot" data-tip="Place a pivot or socket. Use pivots for rotation centers, feet anchors, hands, weapon sockets, and head centers.">Add Pivot</button>
+        <button data-action="duplicatePartAllFrames" data-tip="Copy the selected part mask to every frame. Use this after defining a reusable body part shape.">Duplicate Mask to All Frames</button>
+        <button data-action="mirrorParts" data-tip="Mirror the selected part across the frame center. Use this for left/right body-side setup.">Mirror Selected Part</button>
+        <button data-action="saveSelectedPartAsAsset" data-tip="Store the selected part in the local asset library so it can be reused in character recipes.">Save Selected Part as Asset</button>
+      </div></div>
+      <div class="menu" tabindex="0"><button class="menu-button">Library</button><div class="menu-popover">
+        <button data-action="openAssetImages" data-tip="Import external PNG/WebP/JPEG images as reusable library assets.">Import Asset Images…</button>
+        <button data-action="saveSelectedPartAsAsset" data-tip="Save the selected rig part as a reusable local library asset with private/default metadata.">Save Part as Asset</button>
+        <button data-action="exportLibrary" data-tip="Export your current library metadata and embedded asset images as JSON.">Export Library JSON</button>
+        <button data-action="importLibrary" data-tip="Import a library JSON exported from this tool. Existing assets are preserved unless IDs match.">Import Library JSON…</button>
+        <button data-action="exportCredits" data-tip="Download CREDITS.md and CREDITS.csv based on library/recipe metadata.">Export Credits</button>
+      </div></div>
+      <div class="menu" tabindex="0"><button class="menu-button">Recipe</button><div class="menu-popover">
+        <button data-action="newRecipe" data-tip="Create a clean character recipe. A recipe stores selected library parts, layer order, palette, and export profile.">New Recipe</button>
+        <button data-action="composeRecipe" data-tip="Preview the current recipe by stacking enabled assets in the selected layer order.">Compose Recipe Preview</button>
+        <button data-action="exportRecipe" data-tip="Export character recipe JSON so the character can be rebuilt later.">Export Recipe JSON</button>
+        <button data-action="exportComposedRecipe" data-tip="Export the currently composed character preview as PNG.">Export Composed Recipe PNG</button>
+      </div></div>
+      <div class="menu" tabindex="0"><button class="menu-button">Batch</button><div class="menu-popover">
+        <button data-action="openBatchImages" data-tip="Import multiple spritesheets into the batch queue for QA and export planning.">Import Batch Sheets…</button>
+        <button data-action="addCurrentToBatch" data-tip="Add the current spritesheet and settings to the batch queue.">Add Current Sheet to Batch</button>
+        <button data-action="runBatch" data-tip="Run enabled batch jobs. Current implementation generates QA summaries and package manifests.">Run Batch</button>
+        <button data-action="exportBatchPackage" data-tip="Export batch reports, project snapshots, and queue metadata as a ZIP package.">Export Batch Package</button>
+      </div></div>
+      <div class="menu" tabindex="0"><button class="menu-button">QA</button><div class="menu-popover right-popover">
+        <button data-action="runDiagnostics" data-tip="Scan for empty frames, edge clipping, feet drift, center drift, missing directions, bad pivots, empty parts, and metadata issues.">Run Diagnostics</button>
+        <button data-action="toggleBlockFailures" data-tip="When enabled, export warns or blocks when QA failures are present.">Toggle Block on Failures</button>
+        <button data-action="toggleAllowWarnings" data-tip="When enabled, exports can proceed with warnings. Turn off for strict production gating.">Toggle Allow Warnings</button>
+        <button data-action="exportReport" data-tip="Download a Markdown QA report with specific fix recommendations.">Export QA Report</button>
+      </div></div>
+      <div class="menu" tabindex="0"><button class="menu-button">Export</button><div class="menu-popover right-popover">
+        <button data-action="setExportGodot" data-tip="Use Godot 4 folder naming, pivots, clips, and manifest conventions.">Godot 4 Profile</button>
+        <button data-action="setExportUnity" data-tip="Use Unity 2D frame naming and manifest conventions.">Unity 2D Profile</button>
+        <button data-action="setExportRpgMz" data-tip="Use RPG Maker MZ-oriented output notes and frame organization.">RPG Maker MZ Profile</button>
+        <button data-action="setExportKeter" data-tip="Use KeterEngine atlas, animation clips, and pivot manifest conventions.">KeterEngine Profile</button>
+        <button data-action="saveCustomProfile" data-tip="Save the current export options as an editable custom profile.">Save Custom Profile</button>
+        <button data-action="exportProfiles" data-tip="Download export profile definitions as JSON.">Export Profiles JSON</button>
+      </div></div>
+      <div class="menu" tabindex="0"><button class="menu-button">Tools</button><div class="menu-popover">
+        <button data-action="showPluginManager" data-tip="Open Plugin mode. Enable or disable importer, exporter, validator, and batch plugins without cluttering the canvas.">Plugin Manager</button>
+        <button data-action="openAssetPack" data-tip="Import a folder-style asset pack: PNG assets plus optional metadata JSON or credits CSV files.">Asset Pack Importer…</button>
+        <button data-action="validateProject" data-tip="Run project-integrity checks: schema version, plugin references, library records, recipe links, and export profiles.">Validate Project</button>
+        <button data-action="runVisualDiff" data-tip="Compare frame bounding boxes, center drift, and left/right mirror differences to catch animation alignment errors.">Run Visual QA Diff</button>
+        <button data-action="exportPreview" data-tip="Preview the exact folder and manifest structure that the active exporter will write before generating files.">Export Preview JSON</button>
+        <button data-action="backupProject" data-tip="Download a timestamped backup project file with library metadata and plugin settings included.">Backup Project</button>
+        <button data-action="exportRecoveryPackage" data-tip="Download autosave slots, recent projects, plugin settings, and current snapshot as a recovery ZIP.">Export Recovery Package</button>
+        <button data-action="clearRecoveryData" data-tip="Clear local autosave and recovery slots for this browser. Use only after saving your project.">Clear Recovery Data</button>
+      </div></div>
+      <div class="menu" tabindex="0"><button class="menu-button">Help</button><div class="menu-popover right-popover">
+        <button data-action="showShortcuts" data-tip="Show keyboard shortcuts and mouse controls.">Shortcuts</button>
+        <button data-action="showAbout" data-tip="Show v5 build notes and workflow scope.">About v5</button>
+      </div></div>
+    </div>
+  </nav>
+
+  <main class="workbench">
+    <aside class="mode-rail" aria-label="Workflow modes">
+      <button class="mode-button active" data-mode="slice" data-tip="Slice mode: configure grid and verify individual frames."><span>▦</span>Slice</button>
+      <button class="mode-button" data-mode="animate" data-tip="Animate mode: label rows, preview frame cycles, and generate clips."><span>▶</span>Animate</button>
+      <button class="mode-button" data-mode="rig" data-tip="Rig mode: draw body-part masks, pivots, sockets, and underlap guides."><span>◇</span>Rig</button>
+      <button class="mode-button" data-mode="layers" data-tip="Layers mode: stack imported parts and direction-aware layer orders."><span>☰</span>Layers</button>
+      <button class="mode-button" data-mode="palette" data-tip="Palette mode: extract colors, replace colors, and normalize transparency."><span>◈</span>Palette</button>
+      <button class="mode-button" data-mode="qa" data-tip="QA mode: run production checks and view gating results."><span>✓</span>QA</button>
+      <button class="mode-button" data-mode="export" data-tip="Export mode: choose profiles and package engine-ready outputs."><span>⇩</span>Export</button>
+      <details class="more-modes"><summary>More</summary>
+        <button class="mode-button compact" data-mode="library" data-tip="Library mode: manage reusable part assets and metadata.">Library</button>
+        <button class="mode-button compact" data-mode="recipe" data-tip="Recipe mode: build a character from reusable assets.">Recipe</button>
+        <button class="mode-button compact" data-mode="batch" data-tip="Batch mode: process multiple sheets and export reports.">Batch</button>
+        <button class="mode-button compact" data-mode="plugins" data-tip="Plugins mode: manage importers, exporters, validators, batch steps, and project migration hooks.">Plugins</button>
+      </details>
+    </aside>
+
+    <section class="canvas-shell">
+      <div id="dropZone" class="canvas-toolbar" data-tip="Drop a spritesheet here or use File > Import Spritesheet.">
+        <div class="file-summary">
+          <strong id="sourceName">No source loaded</strong>
+          <span id="sourceMeta">Import a PNG/WebP/JPEG spritesheet to begin.</span>
+        </div>
+        <div class="toolbar-actions">
+          <button data-action="openImage" data-tip="Import source spritesheet.">Import</button>
+          <button data-action="detectGrid" data-tip="Detect frame grid from image dimensions.">Detect Grid</button>
+          <button data-action="runDiagnostics" data-tip="Run QA against the current sheet.">Run QA</button>
+          <button data-action="exportWorkspaceZip" data-tip="Package current project outputs into a ZIP.">Export ZIP</button>
+        </div>
+      </div>
+      <div class="canvas-stage" id="canvasStage">
+        <canvas id="mainCanvas" width="960" height="640" aria-label="Sprite canvas"></canvas>
+        <div id="emptyHint" class="empty-hint">
+          <h2>Drop a spritesheet to begin</h2>
+          <p>V5 keeps the canvas clean while adding plugins, migrations, recovery, visual QA, and asset-pack ingestion under menus and inspectors.</p>
+        </div>
+      </div>
+    </section>
+
+    <aside class="inspector" aria-label="Inspector">
+      <div class="inspector-header">
+        <strong id="inspectorTitle">Slice</strong>
+        <span id="selectionSummary">No selection</span>
+      </div>
+
+      <section class="panel active" data-panel="slice">
+        <h3>Sheet Grid</h3>
+        <div class="grid-two">
+          <label data-tip="Number of frames across the sheet. Adjust until vertical grid lines match the sprites.">Columns <input id="colsInput" type="number" min="1" value="13" /></label>
+          <label data-tip="Number of frame rows. Adjust until horizontal grid lines match the sprites.">Rows <input id="rowsInput" type="number" min="1" value="4" /></label>
+          <label data-tip="Frame width in source pixels.">Frame W <input id="frameWInput" type="number" min="1" value="64" /></label>
+          <label data-tip="Frame height in source pixels.">Frame H <input id="frameHInput" type="number" min="1" value="64" /></label>
+          <label data-tip="Left margin before first frame.">Margin X <input id="marginXInput" type="number" min="0" value="0" /></label>
+          <label data-tip="Top margin before first frame.">Margin Y <input id="marginYInput" type="number" min="0" value="0" /></label>
+          <label data-tip="Horizontal gutter between frame cells.">Spacing X <input id="spacingXInput" type="number" min="0" value="0" /></label>
+          <label data-tip="Vertical gutter between frame cells.">Spacing Y <input id="spacingYInput" type="number" min="0" value="0" /></label>
+        </div>
+        <label data-tip="Base filename used when exporting frames.">Base Name <input id="baseNameInput" type="text" value="sprite" /></label>
+        <label data-tip="Comma-separated labels for each row. These control folder names and animation clips.">Row Labels <textarea id="rowLabelsInput" rows="4"></textarea></label>
+        <label data-tip="Comma-separated direction labels, reused when row labels are generated.">Direction Labels <input id="directionLabelsInput" type="text" value="up,left,down,right" /></label>
+        <div class="button-row">
+          <button data-action="detectGrid">Detect</button>
+          <button data-action="applyLpcPreset">LPC</button>
+          <button data-action="assignLpcRows">LPC Labels</button>
+        </div>
+      </section>
+
+      <section class="panel" data-panel="animate">
+        <h3>Animation Preview</h3>
+        <label data-tip="Row to preview in the animation player.">Preview Row <select id="previewRowSelect"></select></label>
+        <label data-tip="Frames per second for preview and exported animation metadata.">FPS <input id="fpsInput" type="number" min="1" max="60" value="8" /></label>
+        <label data-tip="Comma-separated frame cycle. Empty uses all visible frames in the row.">Frame Cycle <input id="frameCycleInput" type="text" placeholder="0,1,2,3" /></label>
+        <canvas id="previewCanvas" width="160" height="160"></canvas>
+        <div class="button-row"><button data-action="playPreview">Play / Pause</button><button data-action="generateClips">Generate Clips</button></div>
+      </section>
+
+      <section class="panel" data-panel="rig">
+        <h3>Rig Prep</h3>
+        <div class="button-row"><button data-action="addRectPart">Rect Part</button><button data-action="addPolygonPart">Polygon Part</button><button data-action="addPivot">Pivot</button></div>
+        <div class="button-row"><button data-action="addHumanoidTemplate">Humanoid Template</button><button data-action="saveSelectedPartAsAsset">Save as Asset</button></div>
+        <label data-tip="Extra hidden pixels to export around the selected part for rigging underlap/seam repair.">Underlap Padding <input id="underlapPaddingInput" type="number" min="0" max="24" value="2" /></label>
+        <label data-tip="Category assigned when saving the selected part into the library.">Part Category <select id="partCategoryInput"></select></label>
+        <div class="object-list" id="partList"></div>
+        <h4>Pivots / Sockets</h4>
+        <div class="object-list" id="pivotList"></div>
+      </section>
+
+      <section class="panel" data-panel="layers">
+        <h3>Layer Stack</h3>
+        <div class="button-row"><button data-action="openAssetImages">Import Layers</button><button data-action="composeLayers">Compose</button></div>
+        <label data-tip="Direction whose layer order overrides are being edited.">Direction Override <select id="directionOverrideSelect"></select></label>
+        <div class="object-list" id="layerList"></div>
+      </section>
+
+      <section class="panel" data-panel="palette">
+        <h3>Palette Tools</h3>
+        <div class="button-row"><button data-action="extractPalette">Extract Palette</button><button data-action="normalizeTransparency">Normalize Alpha</button></div>
+        <label data-tip="Hex source color to replace, e.g. #ff00ff.">From Color <input id="fromColorInput" type="text" placeholder="#000000" /></label>
+        <label data-tip="Hex replacement color.">To Color <input id="toColorInput" type="text" placeholder="#ffffff" /></label>
+        <button data-action="replaceColor">Replace Color In Preview</button>
+        <div id="paletteSwatches" class="palette-swatches"></div>
+      </section>
+
+      <section class="panel" data-panel="qa">
+        <h3>QA Gates</h3>
+        <label class="checkbox"><input id="blockFailuresInput" type="checkbox" checked /> Block export on failures</label>
+        <label class="checkbox"><input id="allowWarningsInput" type="checkbox" checked /> Allow export with warnings</label>
+        <div class="button-row"><button data-action="runDiagnostics">Run QA</button><button data-action="exportReport">Export Report</button></div>
+        <div id="diagnosticsList" class="diagnostics-list"></div>
+      </section>
+
+      <section class="panel" data-panel="export">
+        <h3>Export Profile</h3>
+        <label data-tip="Current export profile controls folder layout, naming, pivot format, and manifest type.">Profile <select id="exportProfileSelect"></select></label>
+        <label data-tip="Output scale for exported frames.">Scale <input id="scaleInput" type="number" min="1" max="8" value="1" /></label>
+        <label class="checkbox"><input id="smoothingInput" type="checkbox" /> Antialias scaling</label>
+        <label class="checkbox"><input id="folderByRowInput" type="checkbox" checked /> Folder by row label</label>
+        <label class="checkbox"><input id="includeSourceInput" type="checkbox" checked /> Include source in project/export</label>
+        <label class="checkbox"><input id="includeCreditsInput" type="checkbox" checked /> Include credits/license files</label>
+        <pre id="profilePreview" class="code-preview"></pre>
+      </section>
+
+      <section class="panel" data-panel="library">
+        <h3>Asset Library</h3>
+        <label data-tip="Search by name, category, tag, creator, license, or notes.">Search <input id="assetSearchInput" type="search" placeholder="hair, weapon, private…" /></label>
+        <label data-tip="Filter assets by category.">Category <select id="assetCategoryFilter"></select></label>
+        <div class="button-row"><button data-action="openAssetImages">Import</button><button data-action="exportLibrary">Export JSON</button></div>
+        <div id="assetLibraryList" class="asset-grid"></div>
+      </section>
+
+      <section class="panel" data-panel="recipe">
+        <h3>Character Recipe</h3>
+        <label data-tip="Stable ID used for folders, manifests, and engine exports.">Character ID <input id="recipeIdInput" type="text" /></label>
+        <label data-tip="Human-readable character name.">Name <input id="recipeNameInput" type="text" /></label>
+        <label data-tip="Selected export profile for this character.">Export Profile <select id="recipeProfileSelect"></select></label>
+        <div class="button-row"><button data-action="composeRecipe">Preview</button><button data-action="exportRecipe">Export JSON</button></div>
+        <canvas id="recipeCanvas" width="160" height="160"></canvas>
+        <div id="recipeLayerList" class="object-list"></div>
+      </section>
+
+      <section class="panel" data-panel="batch">
+        <h3>Batch Queue</h3>
+        <div class="button-row"><button data-action="openBatchImages">Import Sheets</button><button data-action="addCurrentToBatch">Add Current</button></div>
+        <div class="button-row"><button data-action="runBatch">Run Batch</button><button data-action="exportBatchPackage">Export Batch ZIP</button></div>
+        <div id="batchList" class="object-list"></div>
+        <h4>Batch Logs</h4>
+        <div id="batchLogList" class="diagnostics-list"></div>
+      </section>
+
+      <section class="panel" data-panel="plugins">
+        <h3>Plugin Manager</h3>
+        <label data-tip="Search enabled and disabled plugins by name, type, or description.">Search <input id="pluginSearchInput" type="search" placeholder="exporter, validator, LPC…" /></label>
+        <label data-tip="Filter plugins by role. Importers read sources, exporters package outputs, validators run QA, and batch plugins automate jobs.">Type <select id="pluginTypeFilter"><option value="all">all plugins</option><option value="importer">importers</option><option value="exporter">exporters</option><option value="validator">validators</option><option value="batch">batch jobs</option><option value="migration">migrations</option></select></label>
+        <div class="button-row"><button data-action="enableAllPlugins">Enable All</button><button data-action="disableAllPlugins">Disable All</button></div>
+        <div class="button-row"><button data-action="toggleSelectedPlugin">Toggle Selected</button><button data-action="exportPluginManifest">Export Manifest</button></div>
+        <div id="pluginList" class="object-list"></div>
+      </section>
+    </aside>
+  </main>
+
+  <footer class="status-bar">
+    <span id="statusText">Ready.</span>
+    <span id="qaSummary">QA: not run</span>
+    <span id="autosaveStatus">Autosave idle</span>
+  </footer>
+
+  <div id="contextMenu" class="context-menu" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>

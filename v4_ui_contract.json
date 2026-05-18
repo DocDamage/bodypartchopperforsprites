@@ -1,0 +1,19 @@
+{
+  "version": "4.0.0",
+  "layout": {
+    "topMenuBar": true,
+    "leftWorkflowRail": true,
+    "centerCanvas": true,
+    "rightInspector": true,
+    "bottomStatusBar": true
+  },
+  "uxRules": [
+    "Canvas first",
+    "Advanced actions in menus",
+    "Power actions in right-click menus",
+    "Inspector only shows active workflow settings",
+    "Actionable tooltips on controls",
+    "Ctrl+K command palette"
+  ],
+  "modes": ["slice", "animate", "rig", "layers", "palette", "qa", "export", "library", "recipe", "batch"]
+}
