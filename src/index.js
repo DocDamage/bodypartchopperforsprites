@@ -8,3 +8,6 @@ export * from './plugins/builtin-plugins.js';
 export * from './state/default-state.js';
 export * from './state/project-format.js';
 export * from './validators/diagnostics.js';
+export * from './validators/project-integrity.js';
+export * from './validators/visual-diff.js';
+export * from './validators/timeline.js';

@@ -7,6 +7,9 @@ import { createDefaultGrid, createDefaultProjectState } from '../src/state/defau
 import { PROJECT_SCHEMA, createProjectSnapshot, migrateProject } from '../src/state/project-format.js';
 import { frameCell, frameFromPoint, rectFromPoints, bboxOfPoints, detectGridFromImageSize, makeDefaultRowLabels } from '../src/canvas/frame-utils.js';
 import { createDiagnostic, countDiagnostics, checkQaGate, summarizeDiagnostics, maxRange } from '../src/validators/diagnostics.js';
+import { validateProjectIntegrity } from '../src/validators/project-integrity.js';
+import { buildVisualDiffSummary, validateVisualDiff, buildVisualDiffMarkdown } from '../src/validators/visual-diff.js';
+import { validateTimeline } from '../src/validators/timeline.js';
 import { buildRuntimeBundle } from '../src/exporters/runtime-bundle.js';
 
 function assert(condition, message) {
@@ -44,6 +47,7 @@ const state = createDefaultProjectState();
 state.grid.baseName = 'The Ronin';
 state.grid.rowLabels = ['idle_up', 'idle_left', 'idle_down', 'idle_right'];
 state.export.profileId = 'keter';
+state.source.dataUrl = 'data:image/png;base64,stub';
 assert(state.version === '7.0.0', 'default state reports v7');
 assert(state.profiles.generic.id === 'generic', 'default state includes profiles');
 assert(state.plugins.enabled['importer.generic_spritesheet'] === true, 'default state includes plugin settings');
@@ -80,6 +84,28 @@ assert(countDiagnostics(diagnostics).fail === 1, 'diagnostic counter counts fail
 assert(checkQaGate({ blockFailures: true, allowWarnings: true, diagnostics }).ok === false, 'QA gate blocks failures');
 assert(summarizeDiagnostics(diagnostics).total === 3, 'diagnostic summary counts total');
 assert(maxRange([2, 5, 9]) === 7, 'maxRange computes spread');
+
+assert(validateProjectIntegrity(state).some((diag) => diag.severity === 'pass'), 'project integrity passes valid default state');
+const brokenState = { ...state, recipe: { layers: [{ assetId: 'missing' }] }, library: [] };
+assert(validateProjectIntegrity(brokenState).some((diag) => diag.title === 'Broken recipe layers'), 'project integrity catches broken recipe layers');
+
+const visualSummary = buildVisualDiffSummary({
+  grid: { ...state.grid, cols: 2, rows: 1, rowLabels: ['idle_down'] },
+  frameBoxes: [
+    { row: 0, col: 0, empty: false, x: 10, y: 10, w: 20, h: 30 },
+    { row: 0, col: 1, empty: false, x: 20, y: 10, w: 20, h: 50 }
+  ]
+});
+assert(visualSummary[0].centerDrift === 10, 'visual diff computes center drift');
+assert(validateVisualDiff(visualSummary).some((diag) => diag.title.includes('Center drift')), 'visual diff validator warns on center drift');
+assert(buildVisualDiffMarkdown(visualSummary).includes('Visual QA Diff Report'), 'visual diff report builds markdown');
+
+const timelineDiagnostics = validateTimeline({
+  grid: state.grid,
+  timeline: { clips: [{ name: 'idle_down', row: 2, frames: [0, 1, 2], durations: [125, 125, 125] }] }
+});
+assert(timelineDiagnostics.some((diag) => diag.severity === 'pass'), 'timeline validator passes valid clip');
+assert(validateTimeline({ grid: state.grid, timeline: { clips: [{ name: 'bad', row: 99, frames: [99], durations: [0] }] } }).some((diag) => diag.severity === 'fail'), 'timeline validator fails invalid clip');
 
 const runtime = buildRuntimeBundle({ ...state, qa: { diagnostics }, visualDiff: [{ row: 0 }] }, { frames: [{ row: 0, col: 0 }] });
 assert(runtime.version === '7.0.0', 'runtime bundle uses v7 version');
