@@ -56,8 +56,10 @@ assert(storageShell.libraryStorageStatus.available === true, 'runtime shell expo
 
 storageTarget.localStorage.setItem(STORAGE_KEYS.legacyLibraryV6, JSON.stringify([{ id: 'legacy_asset', name: 'Legacy Hair' }]));
 const syncedStatus = syncShellLibraryStorage(storageShell);
-assert(syncedStatus.legacyAssets === 1, 'syncShellLibraryStorage reports legacy assets after sync');
-assert(JSON.parse(storageTarget.localStorage.getItem(STORAGE_KEYS.library))[0].id === 'legacy_asset', 'syncShellLibraryStorage writes canonical library data');
+const syncedLibrary = JSON.parse(storageTarget.localStorage.getItem(STORAGE_KEYS.library));
+assert(syncedStatus.legacyAssets === 2, 'syncShellLibraryStorage reports mirrored legacy assets after sync');
+assert(syncedLibrary.some((asset) => asset.id === 'asset_1'), 'syncShellLibraryStorage preserves existing canonical library data');
+assert(syncedLibrary.some((asset) => asset.id === 'legacy_asset'), 'syncShellLibraryStorage writes legacy library data into canonical storage');
 
 const target = {};
 attachRuntimeShell(target, shell);
