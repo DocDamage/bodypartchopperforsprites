@@ -19,6 +19,12 @@ This lets future PRs migrate runtime systems gradually instead of replacing the 
 
 `index.html` loads `src/browser/runtime-shell.js` as an ES module before the legacy `app.js` script.
 
+`app.js` also runs as an ES module and imports shared V7 core constants from `src/core/constants.js`.
+
+The constants migration covers `APP_VERSION`, `CATEGORIES`, `LPC_ROW_LABELS`, and the shared `safeName` helper.
+
+Storage keys and project snapshot migration intentionally remain in the legacy app path until the dedicated storage and project-format migration passes.
+
 The shell still runs in legacy bridge mode: it creates `window.DocSpriteSlicerV7`, exposes V7 metadata, and patches the visible brand to v7 while the legacy runtime remains responsible for existing app behavior.
 
 ## Runtime shell responsibilities
@@ -39,9 +45,8 @@ Runtime coverage is split between the runtime-shell module test and the static s
 
 ## Next runtime migration steps
 
-1. Replace legacy constants with imports from `src/core/constants.js`.
-2. Replace legacy project snapshot/migration logic with `src/state/project-format.js`.
-3. Replace legacy storage logic with `src/state/storage.js`.
-4. Replace legacy validators with `src/validators/*`.
-5. Replace legacy exporter metadata builders with `src/exporters/*`.
-6. Retire duplicate logic from `app.js` only after parity tests pass.
+1. Replace legacy project snapshot/migration logic with `src/state/project-format.js`.
+2. Replace legacy storage logic with `src/state/storage.js`.
+3. Replace legacy validators with `src/validators/*`.
+4. Replace legacy exporter metadata builders with `src/exporters/*`.
+5. Retire duplicate logic from `app.js` only after parity tests pass.

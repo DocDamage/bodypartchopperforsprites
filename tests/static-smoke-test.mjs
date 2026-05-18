@@ -28,6 +28,7 @@ assert(index.includes('Doc Sprite Slicer Studio v6'), 'index declares v6 title/b
 assert(index.includes('id="mainCanvas"'), 'index contains main canvas');
 assert(index.includes('src/browser/runtime-shell.js'), 'index loads V7 runtime shell module');
 assert(index.includes('data-mode="timeline"'), 'index exposes Timeline Lab mode');
+assert(index.includes('type="module" src="app.js"'), 'index loads app.js as an ES module');
 assert(index.includes('data-mode="pose"'), 'index exposes Pose Lab mode');
 assert(index.includes('data-mode="remap"'), 'index exposes Sheet Remapper mode');
 assert(index.includes('data-mode="atlas"'), 'index exposes Atlas Lab mode');
@@ -35,7 +36,8 @@ assert(index.includes('data-mode="plugins"'), 'index exposes Plugin Manager mode
 assert(styles.includes('.menu-bar'), 'styles include menu bar layout');
 assert(styles.includes('.workbench'), 'styles include workbench layout');
 assert(styles.includes('.mode-rail'), 'styles include left workflow rail');
-assert(app.includes("const VERSION = '6.0.0'"), 'app version is 6.0.0');
+assert(app.includes("from './src/core/constants.js'"), 'app imports V7 core constants');
+assert(app.includes('const VERSION = APP_VERSION'), 'app version uses core APP_VERSION');
 assert(app.includes('PROJECT_SCHEMA_V6'), 'app includes v6 schema marker');
 assert(app.includes('BUILTIN_PLUGINS'), 'app includes plugin registry');
 assert(app.includes('buildTimelineClipFromRow'), 'app includes timeline clip action');
@@ -45,7 +47,8 @@ assert(runtimeShell.includes('bootRuntimeShell'), 'runtime shell exposes boot he
 assert(runtimeShell.includes('DocSpriteSlicerV7'), 'runtime shell exposes global bridge marker');
 
 try {
-  new vm.Script(app, { filename: 'app.js' });
+  const appScriptBody = app.replace(/^import[\s\S]*?;\n\n/, '');
+  new vm.Script(appScriptBody, { filename: 'app.js' });
   console.log('PASS: app.js parses as JavaScript');
 } catch (error) {
   console.error('FAIL: app.js parses as JavaScript');

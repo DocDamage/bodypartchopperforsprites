@@ -1,7 +1,14 @@
+import {
+  APP_VERSION,
+  CATEGORIES as CORE_CATEGORIES,
+  LPC_ROW_LABELS as CORE_LPC_ROW_LABELS,
+  safeName as coreSafeName
+} from './src/core/constants.js';
+
 (() => {
   'use strict';
 
-  const VERSION = '6.0.0';
+  const VERSION = APP_VERSION;
   const AUTOSAVE_KEY = 'doc_sprite_slicer_studio_v6_autosave';
   const LIBRARY_KEY = 'doc_sprite_slicer_studio_v6_asset_library';
   const AUTOSAVE_SLOTS_KEY = 'doc_sprite_slicer_studio_v6_autosave_slots';
@@ -10,23 +17,8 @@
   const V4_LIBRARY_KEY = 'doc_sprite_slicer_studio_v4_asset_library';
   const V5_LIBRARY_KEY = 'doc_sprite_slicer_studio_v5_asset_library';
 
-  const CATEGORIES = [
-    'body_base','heads','hair','eyes','torsos','arms','hands','legs','feet','armor','cloaks','weapons','accessories','fx','shadows','other'
-  ];
-
-  const LPC_ROW_LABELS = [
-    'spellcast_up','spellcast_left','spellcast_down','spellcast_right',
-    'thrust_up','thrust_left','thrust_down','thrust_right',
-    'walk_up','walk_left','walk_down','walk_right',
-    'slash_up','slash_left','slash_down','slash_right',
-    'shoot_up','shoot_left','shoot_down','shoot_right','hurt', 'climb',
-    'idle_up','idle_left','idle_down','idle_right',
-    'jump_up','jump_left','jump_down','jump_right',
-    'sit_up','sit_left','sit_down','sit_right',
-    'emote_up','emote_left','emote_down','emote_right',
-    'run_up','run_left','run_down','run_right',
-    'combat_up','combat_left','combat_down','combat_right'
-  ];
+  const CATEGORIES = CORE_CATEGORIES;
+  const LPC_ROW_LABELS = CORE_LPC_ROW_LABELS;
 
   const DEFAULT_PROFILES = {
     generic: {
@@ -117,7 +109,7 @@
   function $$(sel, root = document) { return [...root.querySelectorAll(sel)]; }
   function uid(prefix = 'id') { return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`; }
   function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
-  function safeName(s) { return String(s || 'item').toLowerCase().replace(/[^a-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'item'; }
+  const safeName = coreSafeName;
   function textBytes(s) { return enc.encode(s); }
   function pretty(obj) { return JSON.stringify(obj, null, 2); }
 
