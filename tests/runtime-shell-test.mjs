@@ -46,7 +46,6 @@ const memoryStorage = createMemoryStorage();
 const storageTarget = { localStorage: memoryStorage };
 const storageShell = createRuntimeShell({ target: storageTarget, legacyRuntime: true });
 storageShell.storageBridge.saveLibrary([{ id: 'asset_1', name: 'Ronin Hair' }]);
-storageShell.storageStatus = storageShell.storageBridge ? storageShell.storageStatus : storageShell.storageStatus;
 assert(storageShell.storageBridge.available === true, 'runtime shell creates storage bridge from target localStorage');
 assert(storageShell.storageBridge.loadLibrary()[0].id === 'asset_1', 'runtime shell storage bridge can access library storage');
 assert(storageShell.storageStatus.available === true, 'runtime shell exposes available storage status from target storage');
