@@ -1,5 +1,7 @@
 import { APP_VERSION, PROJECT_FORMAT_VERSION, CATEGORIES, LPC_ROW_LABELS, safeName } from '../src/core/constants.js';
-import { DEFAULT_PROFILES, getProfile } from '../src/exporters/profile-defaults.js';
+import { DEFAULT_PROFILES, getProfile, resolveProfilePath } from '../src/exporters/profile-defaults.js';
+import { buildFrameManifest, buildFramePath, buildAnimationManifest, buildExportPreview, inferAnimation, inferDirection } from '../src/exporters/manifest.js';
+import { buildCredits, csvEscape } from '../src/exporters/credits.js';
 import { BUILTIN_PLUGINS, DEFAULT_PLUGIN_SETTINGS, normalizePluginSettings } from '../src/plugins/builtin-plugins.js';
 import { createDefaultGrid, createDefaultProjectState } from '../src/state/default-state.js';
 import { PROJECT_SCHEMA, createProjectSnapshot, migrateProject } from '../src/state/project-format.js';
@@ -33,14 +35,30 @@ assert(makeDefaultRowLabels(5).length === 5, 'default row label generator create
 
 assert(DEFAULT_PROFILES.keter.manifest === 'keter_atlas.json', 'keter profile exists');
 assert(getProfile(DEFAULT_PROFILES, 'missing').id === 'generic', 'missing profile falls back to generic');
+assert(resolveProfilePath(DEFAULT_PROFILES.keter, { base: 'ronin', row: 'idle_down', col: '01' }) === 'keter/frames/idle_down/ronin_idle_down_01.png', 'profile path resolver builds Keter path');
 assert(BUILTIN_PLUGINS.some((plugin) => plugin.id === 'exporter.runtime_bundle'), 'runtime bundle plugin exists');
 assert(DEFAULT_PLUGIN_SETTINGS['validator.project_integrity'] === true, 'default plugins are enabled');
 assert(normalizePluginSettings({ 'validator.visual_diff': false })['validator.visual_diff'] === false, 'plugin settings preserve explicit false');
 
 const state = createDefaultProjectState();
+state.grid.baseName = 'The Ronin';
+state.grid.rowLabels = ['idle_up', 'idle_left', 'idle_down', 'idle_right'];
+state.export.profileId = 'keter';
 assert(state.version === '7.0.0', 'default state reports v7');
 assert(state.profiles.generic.id === 'generic', 'default state includes profiles');
 assert(state.plugins.enabled['importer.generic_spritesheet'] === true, 'default state includes plugin settings');
+
+const framePath = buildFramePath({ grid: state.grid, profiles: state.profiles, exportSettings: state.export, row: 2, col: 0 });
+assert(framePath === 'keter/frames/idle_down/the_ronin_idle_down_01.png', 'buildFramePath uses active profile');
+assert(buildFrameManifest({ grid: state.grid, profiles: state.profiles, exportSettings: state.export }).length === state.grid.rows * state.grid.cols, 'frame manifest covers all cells');
+assert(buildAnimationManifest({ grid: state.grid, anim: state.anim, timeline: state.timeline }).clips.length === state.grid.rowLabels.length, 'animation manifest falls back to row clips');
+assert(buildExportPreview({ state }).files.some((file) => file.type === 'manifest'), 'export preview includes manifest file');
+assert(inferDirection('slash_left') === 'left', 'direction inference uses suffix');
+assert(inferAnimation('slash_left') === 'slash', 'animation inference uses prefix');
+
+const credits = buildCredits({ library: [{ id: 'a1', name: 'Ronin Hair', creator: 'DocDamage', license: 'private' }], recipe: { layers: [{ assetId: 'a1' }] } });
+assert(credits.md.includes('Ronin Hair'), 'credits markdown includes asset name');
+assert(csvEscape('a"b') === '"a""b"', 'csvEscape doubles quotes');
 
 const snapshot = createProjectSnapshot(state, { includeLibrary: true });
 assert(snapshot.projectFormatVersion === 7, 'project snapshot uses v7 format');
