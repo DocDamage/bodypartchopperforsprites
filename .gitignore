@@ -12,8 +12,15 @@ npm-debug.log*
 *.swp
 *.swo
 
-# Dependencies (if added later)
+# Dependencies and build output
 node_modules/
+dist/
+coverage/
+.local/
+
+# Generated/exported artifacts
+*.tmp
+*.zip
 
 # Environment variables
 .env
