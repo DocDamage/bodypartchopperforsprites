@@ -1,46 +1,90 @@
-# Doc Sprite Slicer Studio v6
+# Body Part Chopper for Sprites
 
-V5 is the cumulative release-candidate foundation. It includes V1-V4 functionality and adds production hardening: plugin registry, project migration, asset-pack import, visual QA diff, batch logs, export previews, recovery packages, and stronger project schema handling.
+Doc Sprite Slicer Studio v6 is a local, browser-based spritesheet workstation for slicing sprites, chopping visible body parts into rig-prep layers, managing reusable sprite assets, building character recipes, validating alignment, previewing animation clips, and exporting engine-ready metadata.
 
-Open `index.html` in a browser, import a spritesheet, then use the top menus, right-click actions, inspectors, and Ctrl+K command palette.
+The app is intentionally offline-first. It is a static HTML/CSS/JavaScript tool and can run from a local static server without accounts or cloud services.
 
-## V5 focus
+## Current version
 
-- Keep the UI clean and canvas-first.
-- Move advanced actions into menus and context menus.
-- Make exporters, validators, importers, and batch steps discoverable as plugins.
-- Preserve old project compatibility through migration.
-- Make recovery and backups hard to ignore.
+`6.0.0`
 
-## Main new workflows
+V6 is cumulative. It includes the earlier slicer, rig-prep, asset-library, recipe-builder, batch, plugin, recovery, QA, and export-profile work, plus:
 
-1. **Tools > Plugin Manager** to manage internal plugin modules.
-2. **Tools > Asset Pack Importer** to ingest PNGs plus optional metadata JSON/credits CSV.
-3. **Tools > Run Visual QA Diff** to find frame drift.
-4. **Tools > Export Preview JSON** to inspect output structure before exporting.
-5. **Tools > Export Recovery Package** to package autosaves and recovery data.
+- Animation Lab / timeline clips
+- Onion-skin review
+- Pose Lab for deterministic rig-part transform tests
+- Sheet Remapper plans
+- Atlas Lab
+- Runtime bundle export
+- Plugin registry foundation
+- Static smoke tests
 
-## Workspace ZIP now includes
+## Quick start
 
-- project snapshot
-- frame exports
-- rig parts
-- plugin manifest/settings
-- export preview
-- visual QA diff
-- batch logs
-- recipes
-- asset library
-- credits
+```bash
+npm install
+npm run serve
+```
 
+Then open:
 
-## V6 Additions
+```text
+http://localhost:5173
+```
 
-- Animation Lab with timeline clips and onion-skin review
-- Pose Lab for deterministic rig-part transform snapshots
-- Sheet Remapper for layout conversion plans
-- Atlas Lab for runtime atlas manifests
-- Runtime bundle JSON/ZIP exports
-- Timeline QA validator
+Run smoke tests:
 
-Start with `index.html`. Open the More menu for Timeline, Pose, Remap, and Atlas modes.
+```bash
+npm test
+```
+
+The app can also be opened directly as `index.html`, but using the local server is safer for browser file and module behavior.
+
+## Core workflow
+
+1. Import a spritesheet.
+2. Detect or configure the grid.
+3. Label rows and directions.
+4. Slice frames and preview animation rows.
+5. Draw rig parts and pivots.
+6. Save reusable parts into the asset library.
+7. Build a character recipe from library assets.
+8. Run QA diagnostics.
+9. Export frames, manifests, runtime bundles, reports, and workspace ZIPs.
+
+## Main files
+
+```text
+index.html                 App shell and UI structure
+styles.css                 Canvas-first dark UI
+app.js                     Current monolithic app implementation
+package.json               Local scripts
+scripts/static-server.mjs  Local static server
+tests/static-smoke-test.mjs Static regression smoke test
+docs/                      Project docs
+samples/                   Sample project data
+```
+
+## Repo hardening status
+
+The app currently works as a static single-page tool. The next architectural goal is to split `app.js` into modules without breaking behavior:
+
+```text
+src/state/
+src/canvas/
+src/importers/
+src/exporters/
+src/validators/
+src/plugins/
+src/ui/
+```
+
+Until then, tests should guard the current single-file implementation from regressions.
+
+## Browser storage
+
+The app uses `localStorage` for autosave, recovery, plugin settings, recent projects, and the local asset library. Save project files and workspace ZIPs regularly; browser storage is not a substitute for source control or backups.
+
+## License note
+
+The code in this repository is project-private unless a license is added. Imported third-party sprite assets may have separate licenses. For LPC-style assets, keep credits and source metadata attached to library assets and exported packages.
