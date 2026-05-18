@@ -23,9 +23,11 @@ This lets future PRs migrate runtime systems gradually instead of replacing the 
 
 The constants migration covers `APP_VERSION`, `CATEGORIES`, `LPC_ROW_LABELS`, and the shared `safeName` helper.
 
-Storage keys and project snapshot migration intentionally remain in the legacy app path until the dedicated storage and project-format migration passes.
+The runtime shell now creates and exposes a V7 storage bridge through `window.DocSpriteSlicerV7.storageBridge` plus a compact startup summary through `window.DocSpriteSlicerV7.storageStatus`.
 
-The shell still runs in legacy bridge mode: it creates `window.DocSpriteSlicerV7`, exposes V7 metadata, and patches the visible brand to v7 while the legacy runtime remains responsible for existing app behavior.
+Project snapshot migration intentionally remains in the legacy app path until the dedicated project-format migration pass.
+
+The shell still runs in legacy bridge mode: it creates `window.DocSpriteSlicerV7`, exposes V7 metadata, exposes storage bridge diagnostics, and patches the visible brand to v7 while the legacy runtime remains responsible for existing app behavior.
 
 ## Runtime shell responsibilities
 
@@ -34,6 +36,7 @@ The shell still runs in legacy bridge mode: it creates `window.DocSpriteSlicerV7
 - exposes the V7 project schema
 - creates a default V7 state object
 - exposes the built-in plugin registry
+- exposes the V7 storage bridge and storage status summary
 - records whether the shell is running in legacy bridge mode
 - can patch legacy page branding from v6 to v7
 
@@ -45,8 +48,8 @@ Runtime coverage is split between the runtime-shell module test and the static s
 
 ## Next runtime migration steps
 
-1. Replace legacy project snapshot/migration logic with `src/state/project-format.js`.
-2. Replace legacy storage logic with `src/state/storage.js`.
+1. Replace individual legacy storage functions with `window.DocSpriteSlicerV7.storageBridge` or direct imports from `src/browser/storage-bridge.js`.
+2. Replace legacy project snapshot/migration logic with `src/state/project-format.js`.
 3. Replace legacy validators with `src/validators/*`.
 4. Replace legacy exporter metadata builders with `src/exporters/*`.
 5. Retire duplicate logic from `app.js` only after parity tests pass.

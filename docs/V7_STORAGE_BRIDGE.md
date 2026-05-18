@@ -13,6 +13,8 @@ tests/storage-bridge-test.mjs
 
 The existing legacy browser runtime still owns its storage calls inside `app.js`. This bridge creates a tested boundary for migrating those calls safely instead of replacing every localStorage path at once.
 
+The V7 runtime shell exposes the bridge at `window.DocSpriteSlicerV7.storageBridge` and exposes startup diagnostics at `window.DocSpriteSlicerV7.storageStatus`.
+
 ## Bridge responsibilities
 
 - resolve browser `localStorage` from a supplied target
@@ -26,7 +28,7 @@ The existing legacy browser runtime still owns its storage calls inside `app.js`
 
 ## Compatibility rule
 
-This pass does not change legacy `app.js` runtime storage behavior yet. The next pass can replace individual legacy storage functions with calls to `createStorageBridge()` after parity checks are in place.
+The bridge is available through the V7 shell, but legacy `app.js` storage calls are not replaced yet. The next pass can replace individual legacy storage functions with calls to `createStorageBridge()` or `window.DocSpriteSlicerV7.storageBridge` after parity checks are in place.
 
 ## Test coverage
 
@@ -41,6 +43,12 @@ The storage bridge test covers:
 - recovery state reading
 - storage status summary building
 - recovery-state clearing
+
+The runtime-shell test covers:
+
+- shell creation with unavailable storage
+- shell creation with supplied browser-like storage
+- shell boot attaching a storage bridge to `DocSpriteSlicerV7`
 
 ## Next storage migration steps
 
