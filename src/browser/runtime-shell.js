@@ -2,9 +2,11 @@ import { APP_VERSION, PROJECT_FORMAT_VERSION } from '../core/constants.js';
 import { createDefaultProjectState } from '../state/default-state.js';
 import { PROJECT_SCHEMA } from '../state/project-format.js';
 import { BUILTIN_PLUGINS, DEFAULT_PLUGIN_SETTINGS } from '../plugins/builtin-plugins.js';
+import { buildStorageStatus, createStorageBridge } from './storage-bridge.js';
 
 export function createRuntimeShell(options = {}) {
   const state = options.state || createDefaultProjectState();
+  const storageBridge = options.storageBridge || createStorageBridge({ target: options.target, storage: options.storage });
   const shell = {
     version: APP_VERSION,
     projectFormatVersion: PROJECT_FORMAT_VERSION,
@@ -12,13 +14,15 @@ export function createRuntimeShell(options = {}) {
     state,
     plugins: BUILTIN_PLUGINS,
     pluginSettings: { ...DEFAULT_PLUGIN_SETTINGS, ...(options.pluginSettings || {}) },
+    storageBridge,
+    storageStatus: buildStorageStatus(storageBridge),
     bootedAt: options.bootedAt || new Date().toISOString(),
     legacyRuntime: Boolean(options.legacyRuntime)
   };
   return shell;
 }
 
-export function attachRuntimeShell(target = globalThis, shell = createRuntimeShell({ legacyRuntime: true })) {
+export function attachRuntimeShell(target = globalThis, shell = createRuntimeShell({ target, legacyRuntime: true })) {
   target.DocSpriteSlicerV7 = shell;
   return shell;
 }
@@ -38,7 +42,7 @@ export function patchLegacyBrand(documentRef, version = APP_VERSION) {
 }
 
 export function bootRuntimeShell({ target = globalThis, documentRef = target.document, legacyRuntime = true } = {}) {
-  const shell = attachRuntimeShell(target, createRuntimeShell({ legacyRuntime }));
+  const shell = attachRuntimeShell(target, createRuntimeShell({ target, legacyRuntime }));
   patchLegacyBrand(documentRef, shell.version);
   return shell;
 }
