@@ -22,9 +22,11 @@ function assert(condition, message) {
 const index = read('index.html');
 const styles = read('styles.css');
 const app = read('app.js');
+const runtimeShell = read('src/browser/runtime-shell.js');
 
 assert(index.includes('Doc Sprite Slicer Studio v6'), 'index declares v6 title/brand');
 assert(index.includes('id="mainCanvas"'), 'index contains main canvas');
+assert(index.includes('src/browser/runtime-shell.js'), 'index loads V7 runtime shell module');
 assert(index.includes('data-mode="timeline"'), 'index exposes Timeline Lab mode');
 assert(index.includes('data-mode="pose"'), 'index exposes Pose Lab mode');
 assert(index.includes('data-mode="remap"'), 'index exposes Sheet Remapper mode');
@@ -39,6 +41,8 @@ assert(app.includes('BUILTIN_PLUGINS'), 'app includes plugin registry');
 assert(app.includes('buildTimelineClipFromRow'), 'app includes timeline clip action');
 assert(app.includes('packAtlas'), 'app includes atlas action');
 assert(app.includes('exportRuntimeBundle'), 'app includes runtime bundle export action');
+assert(runtimeShell.includes('bootRuntimeShell'), 'runtime shell exposes boot helper');
+assert(runtimeShell.includes('DocSpriteSlicerV7'), 'runtime shell exposes global bridge marker');
 
 try {
   new vm.Script(app, { filename: 'app.js' });

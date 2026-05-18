@@ -15,6 +15,12 @@ The runtime shell exposes a V7 global bridge while the current browser app still
 
 This lets future PRs migrate runtime systems gradually instead of replacing the whole app in one risky cutover.
 
+## Current loading behavior
+
+`index.html` loads `src/browser/runtime-shell.js` as an ES module before the legacy `app.js` script.
+
+The shell still runs in legacy bridge mode: it creates `window.DocSpriteSlicerV7`, exposes V7 metadata, and patches the visible brand to v7 while the legacy runtime remains responsible for existing app behavior.
+
 ## Runtime shell responsibilities
 
 - exposes `DocSpriteSlicerV7` on the browser target
@@ -27,14 +33,15 @@ This lets future PRs migrate runtime systems gradually instead of replacing the 
 
 ## Compatibility rule
 
-The legacy `app.js` remains active during this pass. The shell is tested in isolation first.
+The legacy `app.js` remains active during this pass. The V7 shell is loaded from `index.html`, but it does not replace legacy handlers or mutate legacy runtime state.
+
+Runtime coverage is split between the runtime-shell module test and the static smoke test that confirms the shell module is loaded by the page.
 
 ## Next runtime migration steps
 
-1. Load the shell from `index.html` before or after legacy `app.js`.
-2. Replace legacy constants with imports from `src/core/constants.js`.
-3. Replace legacy project snapshot/migration logic with `src/state/project-format.js`.
-4. Replace legacy storage logic with `src/state/storage.js`.
-5. Replace legacy validators with `src/validators/*`.
-6. Replace legacy exporter metadata builders with `src/exporters/*`.
-7. Retire duplicate logic from `app.js` only after parity tests pass.
+1. Replace legacy constants with imports from `src/core/constants.js`.
+2. Replace legacy project snapshot/migration logic with `src/state/project-format.js`.
+3. Replace legacy storage logic with `src/state/storage.js`.
+4. Replace legacy validators with `src/validators/*`.
+5. Replace legacy exporter metadata builders with `src/exporters/*`.
+6. Retire duplicate logic from `app.js` only after parity tests pass.
