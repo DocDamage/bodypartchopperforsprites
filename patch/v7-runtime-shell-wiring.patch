@@ -1,0 +1,151 @@
+diff --git a/index.html b/index.html
+index 2c6b74f..0000000 100644
+--- a/index.html
++++ b/index.html
+@@ -367,6 +367,7 @@
+   </footer>
+ 
+   <div id="contextMenu" class="context-menu" hidden></div>
++  <script type="module" src="src/browser/runtime-shell.js"></script>
+   <script src="app.js"></script>
+ </body>
+ </html>
+diff --git a/tests/static-smoke-test.mjs b/tests/static-smoke-test.mjs
+index f69c916..0000000 100644
+--- a/tests/static-smoke-test.mjs
++++ b/tests/static-smoke-test.mjs
+@@ -19,9 +19,11 @@ function assert(condition, message) {
+ const index = read('index.html');
+ const styles = read('styles.css');
+ const app = read('app.js');
++const runtimeShell = read('src/browser/runtime-shell.js');
+ 
+ assert(index.includes('Doc Sprite Slicer Studio v6'), 'index declares v6 title/brand');
+ assert(index.includes('id="mainCanvas"'), 'index contains main canvas');
++assert(index.includes('src/browser/runtime-shell.js'), 'index loads V7 runtime shell module');
+ assert(index.includes('data-mode="timeline"'), 'index exposes Timeline Lab mode');
+ assert(index.includes('data-mode="pose"'), 'index exposes Pose Lab mode');
+ assert(index.includes('data-mode="remap"'), 'index exposes Sheet Remapper mode');
+@@ -41,6 +43,8 @@ assert(app.includes('BUILTIN_PLUGINS'), 'app includes plugin registry');
+ assert(app.includes('buildTimelineClipFromRow'), 'app includes timeline clip action');
+ assert(app.includes('packAtlas'), 'app includes atlas action');
+ assert(app.includes('exportRuntimeBundle'), 'app includes runtime bundle export action');
++assert(runtimeShell.includes('bootRuntimeShell'), 'runtime shell exposes boot helper');
++assert(runtimeShell.includes('DocSpriteSlicerV7'), 'runtime shell exposes global bridge marker');
+ 
+ try {
+   new vm.Script(app, { filename: 'app.js' });
+diff --git a/docs/V7_RUNTIME_SHELL.md b/docs/V7_RUNTIME_SHELL.md
+index 774f388..0000000 100644
+--- a/docs/V7_RUNTIME_SHELL.md
++++ b/docs/V7_RUNTIME_SHELL.md
+@@ -14,6 +14,12 @@ The runtime shell exposes a V7 global bridge while the current browser app still
+ 
+ This lets future PRs migrate runtime systems gradually instead of replacing the whole app in one risky cutover.
+ 
++## Current loading behavior
++
++`index.html` loads `src/browser/runtime-shell.js` as an ES module before the legacy `app.js` script.
++
++The shell still runs in legacy bridge mode: it creates `window.DocSpriteSlicerV7`, exposes V7 metadata, and patches the visible brand to v7 while the legacy runtime remains responsible for existing app behavior.
++
+ ## Runtime shell responsibilities
+ 
+ - exposes `DocSpriteSlicerV7` on the browser target
+@@ -27,17 +33,18 @@ This lets future PRs migrate runtime systems gradually instead of replacing the w
+ 
+ ## Compatibility rule
+ 
+-The legacy `app.js` remains active during this pass. The shell is tested in isolation first.
++The legacy `app.js` remains active during this pass. The V7 shell is loaded from `index.html`, but it does not replace legacy handlers or mutate legacy runtime state.
++
++Runtime coverage is split between the runtime-shell module test and the static smoke test that confirms the shell module is loaded by the page.
+ 
+ ## Next runtime migration steps
+ 
+-1. Load the shell from `index.html` before or after legacy `app.js`.
+-2. Replace legacy constants with imports from `src/core/constants.js`.
+-3. Replace legacy project snapshot/migration logic with `src/state/project-format.js`.
+-4. Replace legacy storage logic with `src/state/storage.js`.
+-5. Replace legacy validators with `src/validators/*`.
+-6. Replace legacy exporter metadata builders with `src/exporters/*`.
+-7. Retire duplicate logic from `app.js` only after parity tests pass.
++1. Replace legacy constants with imports from `src/core/constants.js`.
++2. Replace legacy project snapshot/migration logic with `src/state/project-format.js`.
++3. Replace legacy storage logic with `src/state/storage.js`.
++4. Replace legacy validators with `src/validators/*`.
++5. Replace legacy exporter metadata builders with `src/exporters/*`.
++6. Retire duplicate logic from `app.js` only after parity tests pass.
+diff --git a/docs/V7_IMPORTER_CORE.md b/docs/V7_IMPORTER_CORE.md
+index 626a298..0000000 100644
+--- a/docs/V7_IMPORTER_CORE.md
++++ b/docs/V7_IMPORTER_CORE.md
+@@ -1,25 +1,39 @@
+-# Remaining V7 Import Core Patch
++# V7 Importer Core
+ 
+-GitHub write access became read-only before I could push the final importer-core pass.
++This pass adds pure importer helpers for spritesheets and asset packs while keeping the browser UI on the legacy `app.js` runtime.
+ 
+-Apply these file changes on top of current `main`:
++## Added
+ 
+-- Add `src/importers/asset-pack.js`
+-- Add `src/importers/spritesheet.js`
+-- Add `tests/importer-module-test.mjs`
+-- Replace `tests/all-tests.mjs` with the included version so importer tests run
+-- Replace `src/index.js` with the included version so importer modules are exported
++```text
++src/importers/asset-pack.js
++src/importers/spritesheet.js
++tests/importer-module-test.mjs
++```
+ 
+-Then run:
++`src/index.js` exports both importer modules, and `tests/all-tests.mjs` includes the importer module test.
+ 
+-```bash
+-npm test
+-```
++## Asset pack helpers
+ 
+-Recommended commit message:
++- parse simple CSV credits with quoted comma support
++- normalize CSV headers into safe keys
++- infer asset category from filenames
++- match metadata records by file or stem
++- match credit records by file, filename, or name
++- build normalized asset records with creator, license, tags, source URL, notes, and frame size
+ 
+-```text
+-Add V7 importer core modules
+-```
++## Spritesheet helpers
+ 
+-Recommended PR summary:
++- build source image records
++- detect grid settings from source dimensions using the canvas grid detector
++- keep compatible row labels or generate defaults
++- normalize source basenames for export
++- identify supported image and metadata filenames
+ 
+-```text
+-Adds pure importer modules for asset packs and spritesheets, plus importer module tests and src/index exports.
+-```
++## Test coverage
++
++The importer module test covers:
++
++- quoted CSV field parsing
++- credit row parsing
++- category inference
++- metadata and credit matching
++- normalized asset record creation
++- source record creation
++- LPC-style grid detection
++- basename normalization
++- image and metadata file extension detection
++
++## Compatibility rule
++
++The importer helpers are browser-independent. Legacy UI handlers can migrate to these modules one importer path at a time after parity tests are in place.

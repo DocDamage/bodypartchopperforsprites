@@ -1,0 +1,16 @@
+# From a clean local clone of DocDamage/bodypartchopperforsprites:
+
+git checkout main
+git pull --ff-only
+
+git apply v7-runtime-shell-wiring.patch
+rm -f patch/v7-importer-core.patch
+
+npm test
+
+git add index.html tests/static-smoke-test.mjs docs/V7_RUNTIME_SHELL.md docs/V7_IMPORTER_CORE.md
+git add -u patch/v7-importer-core.patch
+
+git commit -m "Wire V7 runtime shell into static app"
+
+git status --short
