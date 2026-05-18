@@ -61,7 +61,7 @@ export function detectGridFromImageSize(width, height, currentGrid = {}) {
     const cols = Math.floor(width / size);
     const rows = Math.floor(height / size);
     if (cols && rows && width % size === 0 && height % size === 0) {
-      const score = (size === 64 ? 10 : 0) + cols + rows;
+      const score = (size === 64 ? 200 : 0) + cols + rows;
       if (score > best.score) best = { frameW: size, frameH: size, cols, rows, score };
     }
   }
