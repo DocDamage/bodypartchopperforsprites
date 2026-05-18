@@ -1,5 +1,8 @@
 export * from './core/constants.js';
 export * from './canvas/frame-utils.js';
+export * from './canvas/bbox.js';
+export * from './canvas/selection.js';
+export * from './canvas/parts.js';
 export * from './exporters/profile-defaults.js';
 export * from './exporters/manifest.js';
 export * from './exporters/credits.js';
@@ -14,3 +17,7 @@ export * from './validators/diagnostics.js';
 export * from './validators/project-integrity.js';
 export * from './validators/visual-diff.js';
 export * from './validators/timeline.js';
+export * from './labs/timeline-lab.js';
+export * from './labs/pose-lab.js';
+export * from './labs/remap-lab.js';
+export * from './labs/atlas-lab.js';

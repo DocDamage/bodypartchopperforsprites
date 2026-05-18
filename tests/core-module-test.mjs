@@ -9,6 +9,9 @@ import { readJson, writeJson, mergeAssets, loadLibrary, saveLibrary, loadPluginS
 import { createHistoryState, pushHistory, canUndo, canRedo, popUndo, popRedo } from '../src/state/history.js';
 import { buildBackupFileName, buildRecoveryPackageFiles } from '../src/state/backup.js';
 import { frameCell, frameFromPoint, rectFromPoints, bboxOfPoints, detectGridFromImageSize, makeDefaultRowLabels } from '../src/canvas/frame-utils.js';
+import { computeAlphaBoundingBox, boxTouchesEdge, boxCenter, boxBottomCenter, summarizeFrameBoxes } from '../src/canvas/bbox.js';
+import { selectPartAtPoint, selectPivotAtPoint, selectObjectAtPoint, selectionLabel } from '../src/canvas/selection.js';
+import { clonePartToFrame, mirrorPart, buildHumanoidTemplateParts } from '../src/canvas/parts.js';
 import { createDiagnostic, countDiagnostics, checkQaGate, summarizeDiagnostics, maxRange } from '../src/validators/diagnostics.js';
 import { validateProjectIntegrity } from '../src/validators/project-integrity.js';
 import { buildVisualDiffSummary, validateVisualDiff, buildVisualDiffMarkdown } from '../src/validators/visual-diff.js';
@@ -47,6 +50,29 @@ assert(rectFromPoints({ x: 10, y: 20 }, { x: 2, y: 40 }).w === 8, 'rectFromPoint
 assert(bboxOfPoints([{ x: 2, y: 3 }, { x: 12, y: 8 }]).w === 10, 'bboxOfPoints computes width');
 assert(detectGridFromImageSize(832, 256).frameW === 64, 'grid detector prefers 64px LPC grid');
 assert(makeDefaultRowLabels(5).length === 5, 'default row label generator creates requested rows');
+
+const pixels = new Uint8ClampedArray(4 * 4 * 4);
+pixels[(1 * 4 + 2) * 4 + 3] = 255;
+pixels[(2 * 4 + 3) * 4 + 3] = 255;
+const alphaBox = computeAlphaBoundingBox(pixels, 4, 4);
+assert(alphaBox.x === 2 && alphaBox.y === 1 && alphaBox.w === 2 && alphaBox.h === 2, 'alpha bbox detects visible pixels');
+assert(boxTouchesEdge({ empty: false, x: 0, y: 2, w: 2, h: 2 }, 4, 4), 'edge detector catches left edge');
+assert(boxCenter({ empty: false, x: 2, y: 2, w: 4, h: 6 }).x === 4, 'boxCenter computes center x');
+assert(boxBottomCenter({ empty: false, x: 2, y: 2, w: 4, h: 6 }).y === 8, 'boxBottomCenter computes bottom y');
+assert(summarizeFrameBoxes([{ empty: false, w: 2, h: 3, touchesEdge: true }, { empty: true }]).edgeTouching === 1, 'frame box summary counts edge touching');
+
+const part = { id: 'p1', name: 'head', type: 'rect', row: 0, col: 0, x: 10, y: 10, w: 10, h: 10 };
+const pivot = { id: 'v1', name: 'root', x: 32, y: 32 };
+assert(selectPartAtPoint([part], { x: 12, y: 12 }).id === 'p1', 'selectPartAtPoint finds part');
+assert(selectPivotAtPoint([pivot], { x: 33, y: 33 }).id === 'v1', 'selectPivotAtPoint finds pivot');
+assert(selectObjectAtPoint({ grid, parts: [part], pivots: [pivot], point: { x: 12, y: 12 } }).type === 'part', 'selectObjectAtPoint prioritizes part');
+assert(selectionLabel({ type: 'part', id: 'p1' }, part) === 'part: head', 'selectionLabel formats selected object');
+
+const cloned = clonePartToFrame(part, grid, 1, 1, () => 'clone');
+assert(cloned.id === 'clone' && cloned.row === 1 && cloned.col === 1, 'clonePartToFrame assigns new frame');
+const mirrored = mirrorPart(part, grid, () => 'mirror');
+assert(mirrored.id === 'mirror' && mirrored.x === 44, 'mirrorPart mirrors rect inside cell');
+assert(buildHumanoidTemplateParts({ grid, row: 0, col: 0, idFactory: (prefix) => `${prefix}_template` }).length === 7, 'humanoid template creates starter parts');
 
 assert(DEFAULT_PROFILES.keter.manifest === 'keter_atlas.json', 'keter profile exists');
 assert(getProfile(DEFAULT_PROFILES, 'missing').id === 'generic', 'missing profile falls back to generic');

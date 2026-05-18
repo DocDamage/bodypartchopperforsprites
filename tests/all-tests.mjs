@@ -2,7 +2,8 @@ import { spawnSync } from 'node:child_process';
 
 const testFiles = [
   'tests/static-smoke-test.mjs',
-  'tests/core-module-test.mjs'
+  'tests/core-module-test.mjs',
+  'tests/lab-module-test.mjs'
 ];
 
 let failed = false;
