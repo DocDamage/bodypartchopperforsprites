@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Doc Sprite Slicer Studio v5</title>
+  <title>Doc Sprite Slicer Studio v6</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -30,16 +30,16 @@
 
   <nav class="menu-bar" aria-label="Application menu">
     <div class="brand-block">
-      <strong>Doc Sprite Slicer Studio <span>v5</span></strong>
-      <em>Production hardening + plugin pipeline + release-candidate foundation</em>
+      <strong>Doc Sprite Slicer Studio <span>v6</span></strong>
+      <em>Animation Lab + pose testing + remap + runtime bundle pipeline</em>
     </div>
     <div class="menus">
       <div class="menu" tabindex="0"><button class="menu-button">File</button><div class="menu-popover">
-        <button data-action="newProject" data-tip="Start a clean v4 project. This clears current source, parts, recipe, batch jobs, and diagnostics but keeps your local asset library.">New Project</button>
+        <button data-action="newProject" data-tip="Start a clean v6 project. This clears current source, parts, recipe, batch jobs, and diagnostics but keeps your local asset library.">New Project</button>
         <button data-action="openImage" data-tip="Import the source spritesheet. PNG is preferred because transparency is preserved.">Import Spritesheet…</button>
-        <button data-action="openProject" data-tip="Open a .spriteproject.json file. V4 projects can restore source image data, grid settings, parts, pivots, recipes, QA gates, and profiles.">Open Project…</button>
+        <button data-action="openProject" data-tip="Open a .spriteproject.json file. V4/V5/V6 projects can restore source image data, grid settings, parts, pivots, recipes, QA gates, and profiles.">Open Project…</button>
         <button data-action="saveProject" data-tip="Download the current project as a versioned .spriteproject.json file with embedded source image data if enabled.">Save Project</button>
-        <button data-action="recoverAutosave" data-tip="Recover the latest autosaved v4 project stored in this browser.">Recover Autosave</button>
+        <button data-action="recoverAutosave" data-tip="Recover the latest autosaved v6 project stored in this browser.">Recover Autosave</button>
         <hr />
         <button data-action="exportWorkspaceZip" data-tip="Export a complete production package: sliced frames, rig parts, asset metadata, recipe, QA report, credits, and engine manifests.">Export Workspace ZIP</button>
         <button data-action="exportFramesZip" data-tip="Export only sliced frame PNGs using the current grid, labels, and export profile.">Export Frames ZIP</button>
@@ -69,6 +69,23 @@
         <button data-action="applyRpgMzPreset" data-tip="Apply RPG Maker MZ character-sheet defaults. Use this for classic MZ sheets.">Apply RPG Maker MZ Preset</button>
         <button data-action="assignLpcRows" data-tip="Generate LPC-style animation and direction labels for full-sheet export.">Assign LPC Row Labels</button>
         <button data-action="normalizeTransparency" data-tip="Turn low-alpha edge junk into full transparency. Use this after AI-generated or compressed art.">Normalize Transparency</button>
+      </div></div>
+
+      <div class="menu" tabindex="0"><button class="menu-button">Animation Lab</button><div class="menu-popover">
+        <button data-action="showTimelineLab" data-tip="Open Timeline mode. Use this for named clips, per-frame duration notes, and onion-skin review.">Timeline Lab</button>
+        <button data-action="buildTimelineClipFromRow" data-tip="Create a reusable clip from the selected animation row. Use this before exporting runtime bundles.">Add Row Clip</button>
+        <button data-action="toggleOnionSkin" data-tip="Overlay neighboring frames on the selected frame so you can see motion drift and spacing problems.">Toggle Onion Skin</button>
+        <button data-action="exportTimelineJson" data-tip="Export timeline clips as JSON for engine tools and review.">Export Timeline JSON</button>
+        <hr />
+        <button data-action="showPoseLab" data-tip="Open Pose Lab. Use this to save simple part-rotation tests for rig seams and pivots.">Pose Lab</button>
+        <button data-action="savePose" data-tip="Save the current selected part transform as a pose snapshot.">Save Pose Snapshot</button>
+        <hr />
+        <button data-action="showRemapLab" data-tip="Open Sheet Remapper. Use this to preview how the current sheet maps to another engine or layout.">Sheet Remapper</button>
+        <button data-action="generateRemapPreview" data-tip="Generate a deterministic remap plan from current row labels and grid settings.">Generate Remap Plan</button>
+        <hr />
+        <button data-action="showAtlasLab" data-tip="Open Atlas Lab. Use this to preview atlas packing and runtime manifest data.">Atlas Lab</button>
+        <button data-action="packAtlas" data-tip="Build a simple row-wise atlas manifest from the current sliced frames.">Pack Atlas Preview</button>
+        <button data-action="exportRuntimeBundle" data-tip="Export runtime_bundle_v6.json with frames, timeline clips, pivots, atlas metadata, and profile settings.">Export Runtime Bundle</button>
       </div></div>
       <div class="menu" tabindex="0"><button class="menu-button">Rig</button><div class="menu-popover">
         <button data-action="addRectPart" data-tip="Draw a rectangle around a visible body part. Use this for fast rig-layer extraction.">Add Rect Part</button>
@@ -142,6 +159,11 @@
         <button class="mode-button compact" data-mode="library" data-tip="Library mode: manage reusable part assets and metadata.">Library</button>
         <button class="mode-button compact" data-mode="recipe" data-tip="Recipe mode: build a character from reusable assets.">Recipe</button>
         <button class="mode-button compact" data-mode="batch" data-tip="Batch mode: process multiple sheets and export reports.">Batch</button>
+
+        <button class="mode-button compact" data-mode="timeline" data-tip="Timeline mode: create named clips, inspect per-frame durations, and use onion-skin review without cluttering the main UI.">Timeline</button>
+        <button class="mode-button compact" data-mode="pose" data-tip="Pose mode: save simple rig-part pose tests to check pivots, seams, and underlap padding.">Pose</button>
+        <button class="mode-button compact" data-mode="remap" data-tip="Remap mode: convert the current sheet plan into Godot, RPG Maker, LPC, Keter, or generic layouts.">Remap</button>
+        <button class="mode-button compact" data-mode="atlas" data-tip="Atlas mode: generate a runtime atlas manifest and bundle metadata for engines.">Atlas</button>
         <button class="mode-button compact" data-mode="plugins" data-tip="Plugins mode: manage importers, exporters, validators, batch steps, and project migration hooks.">Plugins</button>
       </details>
     </aside>
@@ -203,6 +225,56 @@
         <label data-tip="Comma-separated frame cycle. Empty uses all visible frames in the row.">Frame Cycle <input id="frameCycleInput" type="text" placeholder="0,1,2,3" /></label>
         <canvas id="previewCanvas" width="160" height="160"></canvas>
         <div class="button-row"><button data-action="playPreview">Play / Pause</button><button data-action="generateClips">Generate Clips</button></div>
+      </section>
+
+
+      <section class="panel" data-panel="timeline">
+        <h3>Timeline Lab</h3>
+        <label data-tip="Name for the next clip created from the selected row. Use readable names like idle_down, run_left, slash_up.">Clip Name <input id="timelineClipName" type="text" placeholder="idle_down" /></label>
+        <label data-tip="Source row used when creating a timeline clip. Row labels come from the Sheet panel.">Source Row <select id="timelineRowSelect"></select></label>
+        <label data-tip="Default frames per second for newly created timeline clips.">Clip FPS <input id="timelineFpsInput" type="number" min="1" max="60" value="8" /></label>
+        <div class="button-row"><button data-action="buildTimelineClipFromRow">Add Row Clip</button><button data-action="exportTimelineJson">Export JSON</button></div>
+        <h4>Onion Skin</h4>
+        <label class="checkbox" data-tip="Show previous and next frames over the selected cell. Use this to catch frame spacing and drift problems."><input id="onionEnabledInput" type="checkbox" /> Enable onion skin</label>
+        <div class="grid-two">
+          <label data-tip="How many previous frames to ghost over the selected frame.">Prev <input id="onionPrevInput" type="number" min="0" max="4" value="1" /></label>
+          <label data-tip="How many next frames to ghost over the selected frame.">Next <input id="onionNextInput" type="number" min="0" max="4" value="1" /></label>
+          <label data-tip="Opacity for onion-skin overlays. Lower values keep the source readable.">Opacity <input id="onionOpacityInput" type="number" min="0" max="1" step="0.05" value="0.24" /></label>
+        </div>
+        <div id="timelineFrameList" class="object-list"></div>
+        <h4>Clips</h4>
+        <div id="timelineClipList" class="object-list"></div>
+      </section>
+
+      <section class="panel" data-panel="pose">
+        <h3>Pose Lab</h3>
+        <label data-tip="Name for the current pose test. Use names like arm_swing_test, cloak_sway_test, weapon_socket_test.">Pose Name <input id="poseNameInput" type="text" placeholder="arm_swing_test" /></label>
+        <div class="button-row"><button data-action="savePose">Save Pose</button><button data-action="exportPoseLibrary">Export Poses</button></div>
+        <div class="button-row"><button data-action="testRotateSelectedPartLeft">Rotate Part -15°</button><button data-action="testRotateSelectedPartRight">Rotate Part +15°</button><button data-action="resetPartTransform">Reset</button></div>
+        <p class="muted">Select a rig part first. Pose Lab stores deterministic transform notes for seam testing; it is not a full Spine replacement.</p>
+        <h4>Selected Part Transform</h4>
+        <div id="posePartList" class="object-list"></div>
+        <h4>Saved Poses</h4>
+        <div id="poseList" class="object-list"></div>
+      </section>
+
+      <section class="panel" data-panel="remap">
+        <h3>Sheet Remapper</h3>
+        <label data-tip="Target layout used to generate the remap plan. This does not damage the source; it creates a mapping manifest for export.">Target Layout <select id="remapLayoutSelect"><option value="godot_folders">Godot folders</option><option value="rpg_maker_mz">RPG Maker MZ</option><option value="lpc_idle_4dir">LPC idle 4-direction</option><option value="keter_runtime">KeterEngine runtime</option><option value="generic_json">Generic JSON</option></select></label>
+        <div class="button-row"><button data-action="generateRemapPreview">Generate Plan</button><button data-action="exportRemapPlan">Export Plan</button></div>
+        <div id="remapPreviewList" class="object-list"></div>
+      </section>
+
+      <section class="panel" data-panel="atlas">
+        <h3>Atlas Lab</h3>
+        <label data-tip="Atlas name used in generated manifests and runtime bundles.">Atlas Name <input id="atlasNameInput" type="text" value="sprite_atlas" /></label>
+        <div class="grid-two">
+          <label data-tip="Padding in pixels between frames in the atlas plan.">Padding <input id="atlasPaddingInput" type="number" min="0" max="32" value="2" /></label>
+          <label data-tip="Maximum atlas width before the packer starts a new row.">Max Width <input id="atlasMaxWidthInput" type="number" min="64" value="1024" /></label>
+        </div>
+        <div class="button-row"><button data-action="packAtlas">Pack Preview</button><button data-action="exportAtlasManifest">Export Atlas</button></div>
+        <div class="button-row"><button data-action="exportRuntimeBundle">Export Runtime Bundle</button><button data-action="exportRuntimeZip">Export Runtime ZIP</button></div>
+        <div id="atlasPreviewList" class="object-list"></div>
       </section>
 
       <section class="panel" data-panel="rig">

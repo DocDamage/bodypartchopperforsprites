@@ -1,13 +1,14 @@
 (() => {
   'use strict';
 
-  const VERSION = '5.0.0';
-  const AUTOSAVE_KEY = 'doc_sprite_slicer_studio_v5_autosave';
-  const LIBRARY_KEY = 'doc_sprite_slicer_studio_v5_asset_library';
-  const AUTOSAVE_SLOTS_KEY = 'doc_sprite_slicer_studio_v5_autosave_slots';
-  const RECENT_PROJECTS_KEY = 'doc_sprite_slicer_studio_v5_recent_projects';
-  const PLUGIN_SETTINGS_KEY = 'doc_sprite_slicer_studio_v5_plugin_settings';
+  const VERSION = '6.0.0';
+  const AUTOSAVE_KEY = 'doc_sprite_slicer_studio_v6_autosave';
+  const LIBRARY_KEY = 'doc_sprite_slicer_studio_v6_asset_library';
+  const AUTOSAVE_SLOTS_KEY = 'doc_sprite_slicer_studio_v6_autosave_slots';
+  const RECENT_PROJECTS_KEY = 'doc_sprite_slicer_studio_v6_recent_projects';
+  const PLUGIN_SETTINGS_KEY = 'doc_sprite_slicer_studio_v6_plugin_settings';
   const V4_LIBRARY_KEY = 'doc_sprite_slicer_studio_v4_asset_library';
+  const V5_LIBRARY_KEY = 'doc_sprite_slicer_studio_v5_asset_library';
 
   const CATEGORIES = [
     'body_base','heads','hair','eyes','torsos','arms','hands','legs','feet','armor','cloaks','weapons','accessories','fx','shadows','other'
@@ -60,15 +61,19 @@
     { id:'validator.visual_diff', type:'validator', version:'1.0.0', name:'Visual QA Diff Validator', description:'Checks center drift, bounding-box drift, and mirror mismatch patterns.' },
     { id:'validator.export_gate', type:'validator', version:'1.0.0', name:'Export Gate Validator', description:'Blocks exports when failures or disallowed warnings are present.' },
     { id:'batch.qa_export', type:'batch', version:'1.0.0', name:'Batch QA + Export Logger', description:'Adds structured logs and reports to batch jobs.' },
-    { id:'migration.v1_to_v5', type:'migration', version:'1.0.0', name:'Legacy Project Migrator', description:'Normalizes older project files into the v5 project schema.' }
+    { id:'migration.v1_to_v6', type:'migration', version:'1.0.0', name:'Legacy Project Migrator', description:'Normalizes older project files into the v6 project schema.' },
+    { id:'anim.timeline_lab', type:'animation', version:'1.0.0', name:'Timeline Lab', description:'Creates named clips, onion-skin reviews, and per-frame duration metadata.' },
+    { id:'rig.pose_lab', type:'rig', version:'1.0.0', name:'Pose Lab', description:'Saves deterministic pose tests for rig pivots, seams, and underlap review.' },
+    { id:'exporter.runtime_bundle', type:'exporter', version:'1.0.0', name:'Runtime Bundle Exporter', description:'Builds atlas manifests and runtime_bundle_v6.json for game engines.' },
+    { id:'remapper.sheet_layout', type:'remapper', version:'1.0.0', name:'Sheet Remapper', description:'Generates layout conversion plans for Godot, RPG Maker, LPC, Keter, and generic JSON.' }
   ];
 
   const DEFAULT_PLUGIN_SETTINGS = Object.fromEntries(BUILTIN_PLUGINS.map(p => [p.id, true]));
 
-  const PROJECT_SCHEMA_V5 = {
+  const PROJECT_SCHEMA_V6 = {
     type:'doc_sprite_slicer_studio_project',
-    projectFormatVersion:5,
-    required:['version','source','grid','export','qa','parts','pivots','library','recipe','batch','profiles','pluginsEnabled']
+    projectFormatVersion:6,
+    required:['version','source','grid','export','qa','parts','pivots','library','recipe','batch','profiles','pluginsEnabled','timeline','poseLibrary','remap','atlas']
   };
 
   const state = {
@@ -94,6 +99,12 @@
     recentProjects: [],
     migrationReport: [],
     visualDiff: [],
+    timeline: { clips: [], selectedClipId: '', onionSkin: { enabled: false, prev: 1, next: 1, opacity: 0.24 } },
+    poseLibrary: [],
+    posePreview: { transforms: {} },
+    remap: { target: 'godot_folders', plan: [] },
+    atlas: { name: 'sprite_atlas', padding: 2, maxWidth: 1024, frames: [], manifest: null },
+    runtimeBundle: { lastBuilt: null },
     history: [],
     future: []
   };
@@ -121,7 +132,7 @@
     renderAll();
     draw();
     autosaveLoop();
-    toast('Doc Sprite Slicer Studio v5 ready.', 'ok');
+    toast('Doc Sprite Slicer Studio v6 ready.', 'ok');
   }
 
   function bindElements() {
@@ -131,7 +142,7 @@
       'colsInput','rowsInput','frameWInput','frameHInput','marginXInput','marginYInput','spacingXInput','spacingYInput','baseNameInput','rowLabelsInput','directionLabelsInput',
       'previewRowSelect','fpsInput','frameCycleInput','previewCanvas','partCategoryInput','underlapPaddingInput','partList','pivotList','directionOverrideSelect','layerList',
       'fromColorInput','toColorInput','paletteSwatches','blockFailuresInput','allowWarningsInput','diagnosticsList','exportProfileSelect','scaleInput','smoothingInput','folderByRowInput','includeSourceInput','includeCreditsInput','profilePreview',
-      'assetSearchInput','assetCategoryFilter','assetLibraryList','recipeIdInput','recipeNameInput','recipeProfileSelect','recipeCanvas','recipeLayerList','batchList','batchLogList','pluginSearchInput','pluginTypeFilter','pluginList'
+      'assetSearchInput','assetCategoryFilter','assetLibraryList','recipeIdInput','recipeNameInput','recipeProfileSelect','recipeCanvas','recipeLayerList','batchList','batchLogList','pluginSearchInput','pluginTypeFilter','pluginList','timelineClipName','timelineRowSelect','timelineFpsInput','onionEnabledInput','onionPrevInput','onionNextInput','onionOpacityInput','timelineFrameList','timelineClipList','poseNameInput','posePartList','poseList','remapLayoutSelect','remapPreviewList','atlasNameInput','atlasPaddingInput','atlasMaxWidthInput','atlasPreviewList'
     ]) els[id] = document.getElementById(id);
     els.ctx = els.mainCanvas.getContext('2d', { willReadFrequently: true });
     els.previewCtx = els.previewCanvas.getContext('2d');
@@ -177,7 +188,7 @@
       els.recipeIdInput, els.recipeNameInput
     ];
     syncInputs.forEach(input => input.addEventListener('input', () => { pushHistory(); syncFromInputs(); renderAll(); draw(); }));
-    [els.exportProfileSelect, els.recipeProfileSelect, els.partCategoryInput, els.assetCategoryFilter, els.assetSearchInput, els.directionOverrideSelect, els.pluginSearchInput, els.pluginTypeFilter].filter(Boolean).forEach(input => {
+    [els.exportProfileSelect, els.recipeProfileSelect, els.partCategoryInput, els.assetCategoryFilter, els.assetSearchInput, els.directionOverrideSelect, els.pluginSearchInput, els.pluginTypeFilter, els.timelineClipName, els.timelineRowSelect, els.timelineFpsInput, els.onionEnabledInput, els.onionPrevInput, els.onionNextInput, els.onionOpacityInput, els.poseNameInput, els.remapLayoutSelect, els.atlasNameInput, els.atlasPaddingInput, els.atlasMaxWidthInput].filter(Boolean).forEach(input => {
       input.addEventListener('input', () => { syncFromInputs(); renderAll(); draw(); });
     });
 
@@ -218,7 +229,7 @@
     document.addEventListener('mousemove', moveTooltip);
     document.addEventListener('mouseout', hideTooltip);
 
-    [els.partList, els.pivotList, els.layerList, els.assetLibraryList, els.recipeLayerList, els.batchList].forEach(list => list.addEventListener('contextmenu', showObjectContext));
+    [els.partList, els.pivotList, els.layerList, els.assetLibraryList, els.recipeLayerList, els.batchList, els.timelineClipList, els.poseList, els.posePartList, els.remapPreviewList, els.atlasPreviewList].filter(Boolean).forEach(list => list.addEventListener('contextmenu', showObjectContext));
   }
 
   function setMode(mode) {
@@ -231,7 +242,7 @@
   }
 
   function modeTitle(mode) {
-    return ({ slice:'Slice', animate:'Animate', rig:'Rig Prep', layers:'Layer Stack', palette:'Palette', qa:'QA Gates', export:'Export', library:'Asset Library', recipe:'Recipe Builder', batch:'Batch Queue' })[mode] || mode;
+    return ({ slice:'Slice', animate:'Animate', rig:'Rig Prep', layers:'Layer Stack', palette:'Palette', qa:'QA Gates', export:'Export', library:'Asset Library', recipe:'Recipe Builder', batch:'Batch Queue', plugins:'Plugin Manager', timeline:'Timeline Lab', pose:'Pose Lab', remap:'Sheet Remapper', atlas:'Atlas Lab' })[mode] || mode;
   }
 
   function syncFromInputs() {
@@ -255,6 +266,16 @@
     state.recipe.id = safeName(els.recipeIdInput.value || 'new_character');
     state.recipe.name = els.recipeNameInput.value || 'New Character';
     state.recipe.exportProfile = els.recipeProfileSelect.value || state.export.profileId;
+    if (els.timelineFpsInput) state.timeline.defaultFps = intVal(els.timelineFpsInput, 1);
+    if (els.timelineRowSelect) state.timeline.selectedRow = Number(els.timelineRowSelect.value || state.anim.previewRow || 0);
+    if (els.onionEnabledInput) state.timeline.onionSkin.enabled = els.onionEnabledInput.checked;
+    if (els.onionPrevInput) state.timeline.onionSkin.prev = intVal(els.onionPrevInput, 0);
+    if (els.onionNextInput) state.timeline.onionSkin.next = intVal(els.onionNextInput, 0);
+    if (els.onionOpacityInput) state.timeline.onionSkin.opacity = clamp(Number(els.onionOpacityInput.value || .24), 0, 1);
+    if (els.remapLayoutSelect) state.remap.target = els.remapLayoutSelect.value || state.remap.target;
+    if (els.atlasNameInput) state.atlas.name = safeName(els.atlasNameInput.value || 'sprite_atlas');
+    if (els.atlasPaddingInput) state.atlas.padding = intVal(els.atlasPaddingInput, 0);
+    if (els.atlasMaxWidthInput) state.atlas.maxWidth = intVal(els.atlasMaxWidthInput, 64);
     renderDirectionSelect();
   }
 
@@ -279,6 +300,15 @@
     els.recipeIdInput.value = state.recipe.id;
     els.recipeNameInput.value = state.recipe.name;
     els.recipeProfileSelect.value = state.recipe.exportProfile;
+    if (els.timelineFpsInput) els.timelineFpsInput.value = state.timeline.defaultFps || state.anim.fps || 8;
+    if (els.onionEnabledInput) els.onionEnabledInput.checked = !!state.timeline.onionSkin.enabled;
+    if (els.onionPrevInput) els.onionPrevInput.value = state.timeline.onionSkin.prev ?? 1;
+    if (els.onionNextInput) els.onionNextInput.value = state.timeline.onionSkin.next ?? 1;
+    if (els.onionOpacityInput) els.onionOpacityInput.value = state.timeline.onionSkin.opacity ?? .24;
+    if (els.remapLayoutSelect) els.remapLayoutSelect.value = state.remap.target || 'godot_folders';
+    if (els.atlasNameInput) els.atlasNameInput.value = state.atlas.name || 'sprite_atlas';
+    if (els.atlasPaddingInput) els.atlasPaddingInput.value = state.atlas.padding ?? 2;
+    if (els.atlasMaxWidthInput) els.atlasMaxWidthInput.value = state.atlas.maxWidth ?? 1024;
     renderPreviewRowSelect();
     renderDirectionSelect();
   }
@@ -331,9 +361,9 @@
       extractPalette, replaceColor,
       addSelectedAssetToRecipe, duplicateSelectedAsset, deleteSelectedAsset, removeRecipeLayer, moveRecipeLayerUp, moveRecipeLayerDown, duplicateBatchJob, runSelectedBatchJob, toggleBatchJob, showShortcuts, showAbout,
       sliceThisFrame: exportSelectedFrame, setFrameReference: () => toast('Frame set as reference for rig/recipe previews.', 'ok'), saveFrameAsAsset,
-      selectAllParts: () => toast('Selection is single-object in v5. Use duplicate/mirror tools on selected parts.', 'warn'),
+      selectAllParts: () => toast('Selection is single-object in v6. Use duplicate/mirror tools on selected parts.', 'warn'),
       showPluginManager, toggleSelectedPlugin, enableAllPlugins, disableAllPlugins, exportPluginManifest, exportPluginReport,
-      openAssetPack: () => els.assetPackInput.click(), importAssetPack, validateProject, runVisualDiff, exportVisualDiffReport, exportPreview, backupProject, exportRecoveryPackage, clearRecoveryData, restoreLatestAutosaveSlot, exportFailedBatchOnly
+      showTimelineLab, buildTimelineClipFromRow, duplicateTimelineClip, deleteTimelineClip, applyTimelineToAnimation, exportTimelineJson, exportTimelineZip, toggleOnionSkin, showPoseLab, savePose, deletePose, testRotateSelectedPartLeft, testRotateSelectedPartRight, resetPartTransform, exportPoseLibrary, showRemapLab, generateRemapPreview, exportRemapPlan, showAtlasLab, packAtlas, exportAtlasManifest, exportRuntimeBundle, exportRuntimeZip, openAssetPack: () => els.assetPackInput.click(), importAssetPack, validateProject, runVisualDiff, exportVisualDiffReport, exportPreview, backupProject, exportRecoveryPackage, clearRecoveryData, restoreLatestAutosaveSlot, exportFailedBatchOnly
     };
     if (!actions[action]) return toast(`Unknown action: ${action}`, 'warn');
     try {
@@ -362,7 +392,7 @@
       qa: { blockFailures: true, allowWarnings: true, diagnostics: [], lastRun: null },
       anim: { previewRow: 0, fps: 8, playing: false, timer: null, tick: 0, cycle: [] },
       ui: { mode: 'slice', selectedFrame: { row: 0, col: 0 }, selected: { type: null, id: null }, tool: null, drag: null, polygon: [] },
-      parts: [], pivots: [], layers: [], credits: [], palette: [], batch: [], batchLogs: [], visualDiff: [], migrationReport: [], plugins: { enabled: { ...DEFAULT_PLUGIN_SETTINGS } },
+      parts: [], pivots: [], layers: [], credits: [], palette: [], batch: [], batchLogs: [], visualDiff: [], migrationReport: [], plugins: { enabled: { ...DEFAULT_PLUGIN_SETTINGS } }, timeline: { clips: [], selectedClipId: '', onionSkin: { enabled: false, prev: 1, next: 1, opacity: 0.24 } }, poseLibrary: [], posePreview: { transforms: {} }, remap: { target: 'godot_folders', plan: [] }, atlas: { name: 'sprite_atlas', padding: 2, maxWidth: 1024, frames: [], manifest: null }, runtimeBundle: { lastBuilt: null },
       recipe: { id: 'new_character', name: 'New Character', base: '', layers: [], palette: '', exportProfile: 'generic', directionOrderOverrides: {}, notes: '' }
     })));
     state.source.image = null;
@@ -408,6 +438,12 @@
     state.palette = project.palette || [];
     state.plugins = { enabled: { ...DEFAULT_PLUGIN_SETTINGS, ...(project.pluginsEnabled || project.plugins?.enabled || {}) } };
     state.batchLogs = project.batchLogs || [];
+    state.timeline = project.timeline || { clips: [], selectedClipId: '', onionSkin: { enabled: false, prev: 1, next: 1, opacity: 0.24 } };
+    state.poseLibrary = project.poseLibrary || [];
+    state.posePreview = project.posePreview || { transforms: {} };
+    state.remap = project.remap || { target: 'godot_folders', plan: [] };
+    state.atlas = project.atlas || { name: 'sprite_atlas', padding: 2, maxWidth: 1024, frames: [], manifest: null };
+    state.runtimeBundle = project.runtimeBundle || { lastBuilt: null };
     state.migrationReport = project.migrationReport || state.migrationReport || [];
     savePluginSettings();
     if (project.library && project.includeLibrary) {
@@ -426,12 +462,12 @@
 
   function projectSnapshot(includeLibrary = false) {
     return {
-      type: 'doc_sprite_slicer_studio_project', version: VERSION, projectFormatVersion: 5, savedAt: new Date().toISOString(),
+      type: 'doc_sprite_slicer_studio_project', version: VERSION, projectFormatVersion: 6, savedAt: new Date().toISOString(),
       source: state.export.includeSource ? { name: state.source.name, dataUrl: state.source.dataUrl, width: state.source.width, height: state.source.height } : { name: state.source.name, width: state.source.width, height: state.source.height },
       grid: state.grid, view: state.view, export: state.export, qa: state.qa,
       parts: state.parts, pivots: state.pivots, layers: state.layers,
       library: includeLibrary ? state.library : undefined, includeLibrary,
-      recipe: state.recipe, batch: state.batch, batchLogs: state.batchLogs, profiles: state.profiles, credits: state.credits, palette: state.palette, pluginsEnabled: state.plugins.enabled, migrationReport: state.migrationReport, schema: PROJECT_SCHEMA_V5
+      recipe: state.recipe, batch: state.batch, batchLogs: state.batchLogs, profiles: state.profiles, credits: state.credits, palette: state.palette, pluginsEnabled: state.plugins.enabled, timeline: state.timeline, poseLibrary: state.poseLibrary, posePreview: state.posePreview, remap: state.remap, atlas: state.atlas, runtimeBundle: state.runtimeBundle, migrationReport: state.migrationReport, schema: PROJECT_SCHEMA_V6
     };
   }
 
@@ -535,6 +571,7 @@
     if (!state.source.image) { els.emptyHint.classList.remove('hidden'); updateSourceLabels(); return; }
     els.emptyHint.classList.add('hidden');
     ctx.drawImage(state.source.image, 0, 0, state.source.width * z, state.source.height * z);
+    drawOnionSkin(ctx, z);
     if (state.view.showGrid) drawGrid(ctx, z);
     if (state.view.showNumbers) drawFrameNumbers(ctx, z);
     if (state.view.showBboxes) drawBboxes(ctx, z);
@@ -840,7 +877,7 @@
 
   function loadLibraryFromStorage() {
     try {
-      state.library = JSON.parse(localStorage.getItem(LIBRARY_KEY) || localStorage.getItem(V5_LIBRARY_KEY) || '[]');
+      state.library = JSON.parse(localStorage.getItem(LIBRARY_KEY) || localStorage.getItem(V6_LIBRARY_KEY) || '[]');
       const rawPlugins = localStorage.getItem(PLUGIN_SETTINGS_KEY);
       if (rawPlugins) state.plugins.enabled = { ...DEFAULT_PLUGIN_SETTINGS, ...JSON.parse(rawPlugins) };
     } catch { state.library = []; }
@@ -939,7 +976,7 @@
       files.push({ name:`batch/reports/${safeName(job.name)}.md`, data:textBytes(job.report || `# ${job.name}\n\nNot run yet.\n`) });
       files.push({ name:`batch/projects/${safeName(job.name)}.json`, data:textBytes(pretty(job)) });
     }
-    downloadBlob(createZip(files), 'doc_sprite_slicer_batch_package_v5.zip');
+    downloadBlob(createZip(files), 'doc_sprite_slicer_batch_package_v6.zip');
   }
 
   function runDiagnostics() {
@@ -1001,7 +1038,7 @@
   function exportReport() { downloadText('sprite_qa_report.md', buildQaReport()); }
   function buildQaReport() {
     const c = qaCounts();
-    return `# Doc Sprite Slicer Studio v5 QA Report\n\nGenerated: ${new Date().toISOString()}\nSource: ${state.source.name || 'none'}\nGrid: ${state.grid.cols}×${state.grid.rows}, ${state.grid.frameW}×${state.grid.frameH}\n\n## Gate Summary\n\n- Pass: ${c.pass}\n- Warnings: ${c.warning}\n- Failures: ${c.fail}\n- Block failures: ${state.qa.blockFailures}\n- Allow warnings: ${state.qa.allowWarnings}\n\n## Findings\n\n${state.qa.diagnostics.map(d => `### ${d.severity.toUpperCase()}: ${d.title}\n${d.message}\n`).join('\n') || 'QA has not been run.'}\n`;
+    return `# Doc Sprite Slicer Studio v6 QA Report\n\nGenerated: ${new Date().toISOString()}\nSource: ${state.source.name || 'none'}\nGrid: ${state.grid.cols}×${state.grid.rows}, ${state.grid.frameW}×${state.grid.frameH}\n\n## Gate Summary\n\n- Pass: ${c.pass}\n- Warnings: ${c.warning}\n- Failures: ${c.fail}\n- Block failures: ${state.qa.blockFailures}\n- Allow warnings: ${state.qa.allowWarnings}\n\n## Findings\n\n${state.qa.diagnostics.map(d => `### ${d.severity.toUpperCase()}: ${d.title}\n${d.message}\n`).join('\n') || 'QA has not been run.'}\n`;
   }
 
   function toggleBlockFailures() { state.qa.blockFailures = !state.qa.blockFailures; syncToInputs(); toast(`Block failures ${state.qa.blockFailures ? 'on' : 'off'}.`, 'ok'); }
@@ -1014,7 +1051,7 @@
     const files = [];
     forEachCell((r,c,cell) => files.push(renderFrameFile(r,c)));
     const resolved = await Promise.all(files);
-    downloadBlob(createZip(resolved), `${safeName(state.grid.baseName)}_frames_v5.zip`);
+    downloadBlob(createZip(resolved), `${safeName(state.grid.baseName)}_frames_v6.zip`);
   }
 
   async function exportSelectedFrame() {
@@ -1047,6 +1084,16 @@
     files.push({ name:'manifests/manifest.json', data:textBytes(pretty(buildManifest())) });
     files.push({ name:'reports/qa_report.md', data:textBytes(buildQaReport()) });
     files.push({ name:'profiles/export_profiles.json', data:textBytes(pretty(state.profiles)) });
+    files.push({ name:'plugins/plugin_manifest.json', data:textBytes(pretty(buildPluginManifest())) });
+    files.push({ name:'plugins/plugin_settings.json', data:textBytes(pretty(state.plugins.enabled)) });
+    files.push({ name:'reports/visual_qa_diff.json', data:textBytes(pretty(state.visualDiff.length ? state.visualDiff : buildVisualDiffSummary())) });
+    files.push({ name:'reports/batch_logs.json', data:textBytes(pretty(state.batchLogs || [])) });
+    files.push({ name:'manifests/export_preview.json', data:textBytes(pretty(buildExportPreview())) });
+    files.push({ name:'timeline/timeline_clips.json', data:textBytes(pretty(buildTimelineManifest())) });
+    files.push({ name:'poses/pose_library.json', data:textBytes(pretty(state.poseLibrary || [])) });
+    files.push({ name:'remap/remap_plan.json', data:textBytes(pretty(state.remap.plan || [])) });
+    files.push({ name:'atlas/atlas_manifest.json', data:textBytes(pretty(state.atlas.manifest || buildAtlasManifest())) });
+    files.push({ name:'runtime/runtime_bundle.json', data:textBytes(pretty(buildRuntimeBundle())) });
     files.push({ name:'recipes/character_recipe.json', data:textBytes(pretty(state.recipe)) });
     files.push({ name:'library/asset_library.json', data:textBytes(pretty(state.library)) });
     if (state.export.includeCredits) {
@@ -1058,20 +1105,20 @@
       for (const part of state.parts) files.push({ name:`rig_parts/${safeName(part.category)}/${safeName(part.name)}_${part.row}_${part.col}.png`, data:dataUrlToUint8(await renderPartToDataUrl(part, true)) });
     }
     for (const asset of state.library) files.push({ name:`library/assets/${safeName(asset.category)}/${safeName(asset.name)}_${asset.id}.png`, data:dataUrlToUint8(asset.dataUrl) });
-    downloadBlob(createZip(files), `doc_sprite_slicer_studio_v5_workspace_${safeName(state.grid.baseName || state.recipe.id)}.zip`);
+    downloadBlob(createZip(files), `doc_sprite_slicer_studio_v6_workspace_${safeName(state.grid.baseName || state.recipe.id)}.zip`);
     toast('Workspace ZIP exported.', 'ok');
   }
 
   function buildManifest() {
-    return { version: VERSION, generatedAt: new Date().toISOString(), source: { name: state.source.name, width: state.source.width, height: state.source.height }, grid: state.grid, export: state.export, profile: state.profiles[state.export.profileId], frames: buildFrameManifest(), pivots: state.pivots, parts: state.parts.map(p => ({ ...p, points: p.points || undefined })), recipe: state.recipe, pluginsEnabled: state.plugins.enabled, exportPreview: buildExportPreview() };
+    return { version: VERSION, generatedAt: new Date().toISOString(), source: { name: state.source.name, width: state.source.width, height: state.source.height }, grid: state.grid, export: state.export, profile: state.profiles[state.export.profileId], frames: buildFrameManifest(), pivots: state.pivots, parts: state.parts.map(p => ({ ...p, points: p.points || undefined })), recipe: state.recipe, timeline: buildTimelineManifest(), poseLibrary: state.poseLibrary, remap: state.remap, atlas: state.atlas.manifest || buildAtlasManifest(), runtimeBundle: state.runtimeBundle, pluginsEnabled: state.plugins.enabled, exportPreview: buildExportPreview() };
   }
   function buildFrameManifest() { const frames=[]; forEachCell((r,c,cell)=>frames.push({ row:r, col:c, label:state.grid.rowLabels[r] || `row_${r+1}`, path:framePath(r,c), x:cell.x,y:cell.y,w:cell.w,h:cell.h })); return frames; }
-  function buildAnimationManifest() { return { fps: state.anim.fps, rows: state.grid.rowLabels, clips: state.grid.rowLabels.map((label,row)=>({ name: label, row, frames: state.anim.cycle.length ? state.anim.cycle : Array.from({length:state.grid.cols},(_,i)=>i), fps: state.anim.fps })) }; }
+  function buildAnimationManifest() { return { fps: state.anim.fps, rows: state.grid.rowLabels, clips: state.timeline.clips.length ? state.timeline.clips : state.grid.rowLabels.map((label,row)=>({ name: label, row, frames: state.anim.cycle.length ? state.anim.cycle : Array.from({length:state.grid.cols},(_,i)=>i), fps: state.anim.fps, loop: true })) }; }
   function generateClips() { downloadJson('animation_clips_preview.json', buildAnimationManifest()); toast('Animation clips generated/exported.', 'ok'); }
 
-  async function exportRigLayers() { const files=[]; for (const p of state.parts) files.push({ name:`rig_layers/${safeName(p.category)}/${safeName(p.name)}.png`, data:dataUrlToUint8(await renderPartToDataUrl(p, true)) }); files.push({ name:'rig_layers/pivots.json', data:textBytes(pretty(state.pivots)) }); downloadBlob(createZip(files), 'rig_layers_v5.zip'); }
+  async function exportRigLayers() { const files=[]; for (const p of state.parts) files.push({ name:`rig_layers/${safeName(p.category)}/${safeName(p.name)}.png`, data:dataUrlToUint8(await renderPartToDataUrl(p, true)) }); files.push({ name:'rig_layers/pivots.json', data:textBytes(pretty(state.pivots)) }); downloadBlob(createZip(files), 'rig_layers_v6.zip'); }
   async function exportLpcLayerSheets() { await exportRigLayers(); }
-  async function composeLayers() { toast('Layer composition uses recipe preview in v5. Add assets to recipe for deterministic stacking.', 'ok'); setMode('recipe'); await composeRecipe(); }
+  async function composeLayers() { toast('Layer composition uses recipe preview in v6. Add assets to recipe for deterministic stacking.', 'ok'); setMode('recipe'); await composeRecipe(); }
   async function exportComposedSheet() { await exportComposedRecipe(); }
 
   function buildCredits() {
@@ -1084,12 +1131,12 @@
   }
   function csvEscape(v) { return `"${String(v ?? '').replace(/"/g,'""')}"`; }
   function exportCredits() { const c = buildCredits(); downloadText('CREDITS.md', c.md); downloadText('CREDITS.csv', c.csv); }
-  function exportLibrary() { downloadJson('doc_sprite_asset_library_v5.json', { version: VERSION, assets: state.library }); }
+  function exportLibrary() { downloadJson('doc_sprite_asset_library_v6.json', { version: VERSION, assets: state.library }); }
   async function importLibraryFile(file) { if (!file) return; const json = JSON.parse(await file.text()); state.library = mergeAssets(state.library, json.assets || json.library || []); saveLibraryToStorage(); toast('Library imported.', 'ok'); }
 
   function setProfile(id) { state.export.profileId = id; state.recipe.exportProfile = id; syncToInputs(); toast(`Export profile: ${state.profiles[id].name}.`, 'ok'); }
   function saveCustomProfile() { const id = uid('profile'); state.profiles[id] = { ...state.profiles[state.export.profileId], id, name: `Custom ${Object.keys(state.profiles).length + 1}`, scale: state.export.scale, folderByRow: state.export.folderByRow }; renderProfileSelects(); setProfile(id); }
-  function exportProfiles() { downloadJson('export_profiles_v5.json', state.profiles); }
+  function exportProfiles() { downloadJson('export_profiles_v6.json', state.profiles); }
 
   function extractPalette() {
     if (!state.source.image) return toast('Load a source first.', 'warn');
@@ -1117,20 +1164,22 @@
     if (type === 'recipeLayer') removeRecipeLayer();
     if (type === 'batch') state.batch = state.batch.filter(x=>x.id!==id);
     if (type === 'layer') state.layers = state.layers.filter(x=>x.id!==id);
+    if (type === 'timelineClip') state.timeline.clips = state.timeline.clips.filter(x=>x.id!==id);
+    if (type === 'pose') state.poseLibrary = state.poseLibrary.filter(x=>x.id!==id);
     state.ui.selected = { type:null,id:null }; renderAll(); draw();
   }
 
   function copySettings() { navigator.clipboard?.writeText(pretty({ grid:state.grid, export:state.export, qa:state.qa })).then(()=>toast('Settings copied.', 'ok')).catch(()=>downloadText('settings.json', pretty({grid:state.grid, export:state.export, qa:state.qa}))); }
   async function pasteSettings() { const text = prompt('Paste settings JSON:'); if (!text) return; const j = JSON.parse(text); Object.assign(state.grid, j.grid || {}); Object.assign(state.export, j.export || {}); Object.assign(state.qa, j.qa || {}); syncToInputs(); toast('Settings pasted.', 'ok'); }
 
-  function renderAll() { syncToInputs(); renderPreviewRowSelect(); renderLists(); renderDiagnostics(); renderPalette(); renderProfilePreview(); updateSelectionSummary(); updateQaSummary(); updateSourceLabels(); }
+  function renderAll() { syncToInputs(); renderPreviewRowSelect(); renderTimelineRowSelect(); renderLists(); renderDiagnostics(); renderPalette(); renderProfilePreview(); updateSelectionSummary(); updateQaSummary(); updateSourceLabels(); }
   function updateSourceLabels() { els.sourceName.textContent = state.source.name || 'No source loaded'; els.sourceMeta.textContent = state.source.width ? `${state.source.width}×${state.source.height} px | ${state.grid.cols}×${state.grid.rows} grid | ${state.grid.frameW}×${state.grid.frameH}` : 'Import a PNG/WebP/JPEG spritesheet to begin.'; }
   function renderPreviewRowSelect() { els.previewRowSelect.innerHTML = Array.from({ length: state.grid.rows }, (_, i) => `<option value="${i}">${i}: ${state.grid.rowLabels[i] || `row_${i+1}`}</option>`).join(''); els.previewRowSelect.value = clamp(state.anim.previewRow,0,state.grid.rows-1); }
-  function renderLists() { renderParts(); renderPivots(); renderLayers(); renderAssets(); renderRecipeLayers(); renderBatch(); renderBatchLogs(); renderPlugins(); }
+  function renderLists() { renderParts(); renderPivots(); renderLayers(); renderAssets(); renderRecipeLayers(); renderBatch(); renderBatchLogs(); renderPlugins(); renderTimelineLists(); renderPoseLists(); renderRemapPreview(); renderAtlasPreview(); }
   function rowActive(type,id) { return state.ui.selected.type === type && state.ui.selected.id === id ? ' active' : ''; }
   function renderParts() { els.partList.innerHTML = state.parts.map(p => `<div class="object-row${rowActive('part',p.id)}" data-type="part" data-id="${p.id}"><div class="object-main"><strong>${escapeHtml(p.name)}</strong><span>${p.category} | ${p.type} | frame ${p.row}:${p.col}</span></div><span class="badge">z${p.zOrder}</span></div>`).join('') || '<span class="muted">No rig parts yet.</span>'; wireObjectRows(els.partList); }
   function renderPivots() { els.pivotList.innerHTML = state.pivots.map(p => `<div class="object-row${rowActive('pivot',p.id)}" data-type="pivot" data-id="${p.id}"><div class="object-main"><strong>${escapeHtml(p.name)}</strong><span>${p.kind || 'custom'} | ${Math.round(p.x)},${Math.round(p.y)}</span></div></div>`).join('') || '<span class="muted">No pivots yet.</span>'; wireObjectRows(els.pivotList); }
-  function renderLayers() { els.layerList.innerHTML = state.layers.map(l => `<div class="object-row${rowActive('layer',l.id)}" data-type="layer" data-id="${l.id}"><img class="thumb" src="${l.dataUrl}"><div class="object-main"><strong>${escapeHtml(l.name)}</strong><span>${l.category || 'layer'} | z${l.zOrder || 100}</span></div></div>`).join('') || '<span class="muted">Layer stack is recipe-driven in v5.</span>'; wireObjectRows(els.layerList); }
+  function renderLayers() { els.layerList.innerHTML = state.layers.map(l => `<div class="object-row${rowActive('layer',l.id)}" data-type="layer" data-id="${l.id}"><img class="thumb" src="${l.dataUrl}"><div class="object-main"><strong>${escapeHtml(l.name)}</strong><span>${l.category || 'layer'} | z${l.zOrder || 100}</span></div></div>`).join('') || '<span class="muted">Layer stack is recipe-driven in v6.</span>'; wireObjectRows(els.layerList); }
   function renderAssets() { const q = (els.assetSearchInput.value || '').toLowerCase(), cat = els.assetCategoryFilter.value || 'all'; const assets = state.library.filter(a => (cat==='all'||a.category===cat) && JSON.stringify(a).toLowerCase().includes(q)); els.assetLibraryList.innerHTML = assets.map(a => `<div class="asset-card${rowActive('asset',a.id)}" data-type="asset" data-id="${a.id}"><img src="${a.thumb || a.dataUrl}" alt=""><strong>${escapeHtml(a.name)}</strong><span>${a.category} | ${a.license || 'private'}</span></div>`).join('') || '<span class="muted">No assets. Save rig parts or import asset images.</span>'; wireObjectRows(els.assetLibraryList); }
   function renderRecipeLayers() { els.recipeLayerList.innerHTML = state.recipe.layers.map((l,i) => { const a = state.library.find(x=>x.id===l.assetId); return `<div class="object-row${rowActive('recipeLayer',l.id)}" data-type="recipeLayer" data-id="${l.id}">${a?`<img class="thumb" src="${a.thumb || a.dataUrl}">`:''}<div class="object-main"><strong>${i+1}. ${escapeHtml(a?.name || 'Missing asset')}</strong><span>${a?.category || 'missing'} | ${l.enabled === false ? 'disabled' : 'enabled'} | z${l.zOrder}</span></div></div>`; }).join('') || '<span class="muted">Add assets from Library mode.</span>'; wireObjectRows(els.recipeLayerList); }
   function renderBatch() { els.batchList.innerHTML = state.batch.map(j => `<div class="object-row${rowActive('batch',j.id)}" data-type="batch" data-id="${j.id}"><div class="object-main"><strong>${escapeHtml(j.name)}</strong><span>${j.enabled ? 'enabled' : 'disabled'} | ${j.status}</span></div><span class="badge">${j.width}×${j.height}</span></div>`).join('') || '<span class="muted">No batch jobs.</span>'; wireObjectRows(els.batchList); }
@@ -1172,12 +1221,14 @@
     showContext(e.clientX,e.clientY,[['Slice This Frame','sliceThisFrame'],['Save Frame as Asset','saveFrameAsAsset'],['Set as Idle Reference','setFrameReference'],'sep',['Add Rect Part Here','addRectPart'],['Add Polygon Part','addPolygonPart'],['Place Pivot','addPivot'],'sep',['Run QA','runDiagnostics'],['Export Workspace ZIP','exportWorkspaceZip']]);
   }
   function showObjectContext(e) { const row = e.target.closest('[data-type]'); if (!row) return; e.preventDefault(); selectObject(row.dataset.type,row.dataset.id); const type=row.dataset.type; let items=[]; if (type==='asset') items=[['Add to Character','addSelectedAssetToRecipe'],['Duplicate Asset','duplicateSelectedAsset'],['Delete Asset','deleteSelectedAsset'],['Export Library','exportLibrary']]; if (type==='recipeLayer') items=[['Move Up','moveRecipeLayerUp'],['Move Down','moveRecipeLayerDown'],['Remove Layer','removeRecipeLayer'],['Compose Preview','composeRecipe']]; if (type==='batch') items=[['Run Job','runSelectedBatchJob'],['Duplicate Job','duplicateBatchJob'],['Enable/Disable','toggleBatchJob'],['Export Failed Only','exportFailedBatchOnly'],['Export Batch Package','exportBatchPackage']];
+    if (type==='timelineClip') items=[['Apply to Animation','applyTimelineToAnimation'],['Duplicate Clip','duplicateTimelineClip'],['Delete Clip','deleteTimelineClip'],['Export Timeline JSON','exportTimelineJson']];
+    if (type==='pose') items=[['Delete Pose','deletePose'],['Export Pose Library','exportPoseLibrary']];
     if (type==='plugin') items=[['Toggle Plugin','toggleSelectedPlugin'],['Export Plugin Manifest','exportPluginManifest'],['Export Plugin Report','exportPluginReport']]; if (type==='part') items=[['Save as Asset','saveSelectedPartAsAsset'],['Duplicate Mask to All Frames','duplicatePartAllFrames'],['Mirror Part','mirrorParts'],['Delete Part','deleteSelection']]; if (type==='pivot') items=[['Delete Pivot','deleteSelection']]; showContext(e.clientX,e.clientY,items); }
   function showContext(x,y,items) { els.contextMenu.innerHTML = items.map(it => it==='sep' ? '<div class="sep"></div>' : `<button data-action="${it[1]}">${it[0]}</button>`).join(''); els.contextMenu.style.left = `${x}px`; els.contextMenu.style.top = `${y}px`; els.contextMenu.hidden = false; }
   function hideContextMenu() { els.contextMenu.hidden = true; }
 
   const COMMANDS = [
-    ['Import Spritesheet','openImage','File'],['Open Project','openProject','File'],['Save Project','saveProject','File'],['Recover Autosave','recoverAutosave','File'],['Export Workspace ZIP','exportWorkspaceZip','Export'],['Export Frames ZIP','exportFramesZip','Export'],['Detect Grid','detectGrid','Sheet'],['Apply LPC Preset','applyLpcPreset','Sheet'],['Assign LPC Row Labels','assignLpcRows','Sheet'],['Run Diagnostics','runDiagnostics','QA'],['Export QA Report','exportReport','QA'],['Add Rect Part','addRectPart','Rig'],['Add Polygon Part','addPolygonPart','Rig'],['Add Pivot','addPivot','Rig'],['Save Selected Part as Asset','saveSelectedPartAsAsset','Library'],['Import Asset Images','openAssetImages','Library'],['New Recipe','newRecipe','Recipe'],['Compose Recipe','composeRecipe','Recipe'],['Import Batch Sheets','openBatchImages','Batch'],['Run Batch','runBatch','Batch'],['Godot 4 Profile','setExportGodot','Export'],['KeterEngine Profile','setExportKeter','Export'],['Plugin Manager','showPluginManager','Tools'],['Asset Pack Importer','openAssetPack','Tools'],['Validate Project','validateProject','Tools'],['Run Visual QA Diff','runVisualDiff','QA'],['Export Preview','exportPreview','Export'],['Backup Project','backupProject','File']
+    ['Import Spritesheet','openImage','File'],['Open Project','openProject','File'],['Save Project','saveProject','File'],['Recover Autosave','recoverAutosave','File'],['Export Workspace ZIP','exportWorkspaceZip','Export'],['Export Frames ZIP','exportFramesZip','Export'],['Detect Grid','detectGrid','Sheet'],['Apply LPC Preset','applyLpcPreset','Sheet'],['Assign LPC Row Labels','assignLpcRows','Sheet'],['Run Diagnostics','runDiagnostics','QA'],['Export QA Report','exportReport','QA'],['Add Rect Part','addRectPart','Rig'],['Add Polygon Part','addPolygonPart','Rig'],['Add Pivot','addPivot','Rig'],['Save Selected Part as Asset','saveSelectedPartAsAsset','Library'],['Import Asset Images','openAssetImages','Library'],['New Recipe','newRecipe','Recipe'],['Compose Recipe','composeRecipe','Recipe'],['Import Batch Sheets','openBatchImages','Batch'],['Run Batch','runBatch','Batch'],['Godot 4 Profile','setExportGodot','Export'],['KeterEngine Profile','setExportKeter','Export'],['Timeline Lab','showTimelineLab','Animation Lab'],['Add Row Clip','buildTimelineClipFromRow','Animation Lab'],['Toggle Onion Skin','toggleOnionSkin','Animation Lab'],['Export Timeline JSON','exportTimelineJson','Animation Lab'],['Pose Lab','showPoseLab','Rig'],['Save Pose Snapshot','savePose','Rig'],['Sheet Remapper','showRemapLab','Sheet'],['Generate Remap Plan','generateRemapPreview','Sheet'],['Atlas Lab','showAtlasLab','Export'],['Pack Atlas Preview','packAtlas','Export'],['Export Runtime Bundle','exportRuntimeBundle','Export'],['Plugin Manager','showPluginManager','Tools'],['Asset Pack Importer','openAssetPack','Tools'],['Validate Project','validateProject','Tools'],['Run Visual QA Diff','runVisualDiff','QA'],['Export Preview','exportPreview','Export'],['Backup Project','backupProject','File']
   ];
   function showCommandPalette() { els.commandPalette.hidden = false; els.commandSearch.value=''; renderCommands(''); setTimeout(()=>els.commandSearch.focus(),20); }
   function hideCommandPalette() { els.commandPalette.hidden = true; }
@@ -1200,7 +1251,7 @@
 
 
 
-  // ---------------- V5 production-hardening layer ----------------
+  // ---------------- V6 production-hardening layer ----------------
   function isPluginEnabled(id) { return state.plugins?.enabled?.[id] !== false; }
   function pluginBadge(plugin) { return isPluginEnabled(plugin.id) ? 'enabled' : 'disabled'; }
   function savePluginSettings() { try { localStorage.setItem(PLUGIN_SETTINGS_KEY, JSON.stringify(state.plugins.enabled)); } catch {} }
@@ -1209,8 +1260,8 @@
     const report = [];
     const from = Number(project.projectFormatVersion || String(project.version || '').match(/^(\d+)/)?.[1] || 1);
     const migrated = { ...project };
-    if (from < 5) report.push(`Migrated project from v${from || 'unknown'} to v5 schema.`);
-    migrated.projectFormatVersion = 5;
+    if (from < 5) report.push(`Migrated project from v${from || 'unknown'} to v6 schema.`);
+    migrated.projectFormatVersion = 6;
     migrated.version = VERSION;
     migrated.type = 'doc_sprite_slicer_studio_project';
     migrated.grid = { cols:13, rows:4, frameW:64, frameH:64, marginX:0, marginY:0, spacingX:0, spacingY:0, rowLabels:['up','left','down','right'], directionLabels:['up','left','down','right'], baseName:'sprite', ...(migrated.grid || {}) };
@@ -1227,6 +1278,12 @@
     migrated.credits = Array.isArray(migrated.credits) ? migrated.credits : [];
     migrated.palette = Array.isArray(migrated.palette) ? migrated.palette : [];
     migrated.pluginsEnabled = { ...DEFAULT_PLUGIN_SETTINGS, ...(migrated.pluginsEnabled || migrated.plugins?.enabled || {}) };
+    migrated.timeline = migrated.timeline || { clips: [], selectedClipId: '', onionSkin: { enabled:false, prev:1, next:1, opacity:.24 } };
+    migrated.poseLibrary = Array.isArray(migrated.poseLibrary) ? migrated.poseLibrary : [];
+    migrated.posePreview = migrated.posePreview || { transforms: {} };
+    migrated.remap = migrated.remap || { target: 'godot_folders', plan: [] };
+    migrated.atlas = migrated.atlas || { name: 'sprite_atlas', padding: 2, maxWidth: 1024, frames: [], manifest: null };
+    migrated.runtimeBundle = migrated.runtimeBundle || { lastBuilt: null };
     migrated.migrationReport = [...(migrated.migrationReport || []), ...report];
     state.migrationReport = migrated.migrationReport;
     return migrated;
@@ -1273,7 +1330,7 @@
       { name:'plugins/plugin_settings.json', data:textBytes(pretty(state.plugins.enabled)) },
       { name:'plugins/plugin_manifest.json', data:textBytes(pretty(buildPluginManifest())) }
     ];
-    downloadBlob(createZip(files), 'doc_sprite_slicer_studio_v5_recovery_package.zip');
+    downloadBlob(createZip(files), 'doc_sprite_slicer_studio_v6_recovery_package.zip');
   }
 
   function showPluginManager() { setMode('plugins'); toast('Plugin Manager opened.', 'ok'); }
@@ -1288,16 +1345,16 @@
   function enableAllPlugins() { pushHistory(); for (const p of BUILTIN_PLUGINS) state.plugins.enabled[p.id] = true; savePluginSettings(); toast('All plugins enabled.', 'ok'); }
   function disableAllPlugins() { pushHistory(); for (const p of BUILTIN_PLUGINS) state.plugins.enabled[p.id] = false; savePluginSettings(); toast('All plugins disabled. Core app remains usable.', 'warn'); }
   function buildPluginManifest() { return { version: VERSION, generatedAt:new Date().toISOString(), plugins: BUILTIN_PLUGINS.map(p => ({ ...p, enabled:isPluginEnabled(p.id) })) }; }
-  function exportPluginManifest() { downloadJson('doc_sprite_slicer_v5_plugin_manifest.json', buildPluginManifest()); }
+  function exportPluginManifest() { downloadJson('doc_sprite_slicer_v6_plugin_manifest.json', buildPluginManifest()); }
   function exportPluginReport() {
     const groups = BUILTIN_PLUGINS.reduce((acc,p)=>{ (acc[p.type] ||= []).push(p); return acc; }, {});
-    const md = [`# V5 Plugin Report`, ``, `Generated: ${new Date().toISOString()}`, ``];
+    const md = [`# V6 Plugin Report`, ``, `Generated: ${new Date().toISOString()}`, ``];
     for (const [type, items] of Object.entries(groups)) {
       md.push(`## ${type}`);
       for (const p of items) md.push(`- **${p.name}** (${p.id}) v${p.version} — ${isPluginEnabled(p.id) ? 'enabled' : 'disabled'} — ${p.description}`);
       md.push('');
     }
-    downloadText('doc_sprite_slicer_v5_plugin_report.md', md.join('\n'));
+    downloadText('doc_sprite_slicer_v6_plugin_report.md', md.join('\n'));
   }
 
   async function importAssetPack(files) {
@@ -1411,17 +1468,17 @@
     if (state.export.includeCredits) files.push({ type:'credits', path:'credits/CREDITS.md' });
     return { version:VERSION, profile: state.profiles[state.export.profileId], generatedAt:new Date().toISOString(), files };
   }
-  function exportPreview() { downloadJson('export_preview_v5.json', buildExportPreview()); toast('Export preview downloaded.', 'ok'); }
+  function exportPreview() { downloadJson('export_preview_v6.json', buildExportPreview()); toast('Export preview downloaded.', 'ok'); }
 
   function exportFailedBatchOnly() {
     const failed = state.batch.filter(j => ['fail','warnings'].includes(j.status));
     const files = failed.map(j => ({ name:`failed/${safeName(j.name)}.json`, data:textBytes(pretty(j)) }));
     files.push({ name:'failed/failed_items.json', data:textBytes(pretty(failed)) });
-    downloadBlob(createZip(files), 'failed_batch_items_v5.zip');
+    downloadBlob(createZip(files), 'failed_batch_items_v6.zip');
   }
 
   function showShortcuts() { alert('Shortcuts\n\nCtrl+K: Command palette\nCtrl+S: Save project\nCtrl+Z: Undo\nCtrl+Y: Redo\nEsc: Cancel current tool/context menu\nDelete: Delete selected object\nRight-click canvas/items: context actions'); }
-  function showAbout() { alert('Doc Sprite Slicer Studio v5\n\nV5 hardens the V5 pipeline with plugins, schema migration, autosave slots, asset-pack importing, visual QA diffs, modular exporters/validators, batch logs, and recovery packages.'); }
+  function showAbout() { alert('Doc Sprite Slicer Studio v6\n\nV6 hardens the V6 pipeline with plugins, schema migration, autosave slots, asset-pack importing, visual QA diffs, modular exporters/validators, batch logs, and recovery packages.'); }
 
   function createZip(files) {
     const chunks=[], central=[]; let offset=0; const now=new Date(), dos=dosDateTime(now);
@@ -1441,4 +1498,245 @@
   function dosDateTime(date) { return { time:(date.getHours()<<11)|(date.getMinutes()<<5)|Math.floor(date.getSeconds()/2), date:((date.getFullYear()-1980)<<9)|((date.getMonth()+1)<<5)|date.getDate() }; }
   const CRC_TABLE = (() => { const table = new Uint32Array(256); for (let i=0;i<256;i++) { let c=i; for (let k=0;k<8;k++) c = c & 1 ? 0xedb88320 ^ (c>>>1) : c>>>1; table[i]=c>>>0; } return table; })();
   function crc32(data) { let c=0xffffffff; for (let i=0;i<data.length;i++) c = CRC_TABLE[(c ^ data[i]) & 0xff] ^ (c>>>8); return (c ^ 0xffffffff) >>> 0; }
+
+  // -----------------------------
+  // V6 Animation Lab + Runtime Pipeline
+  // -----------------------------
+  function showTimelineLab() { setMode('timeline'); toast('Timeline Lab opened.', 'ok'); }
+  function showPoseLab() { setMode('pose'); toast('Pose Lab opened.', 'ok'); }
+  function showRemapLab() { setMode('remap'); toast('Sheet Remapper opened.', 'ok'); }
+  function showAtlasLab() { setMode('atlas'); toast('Atlas Lab opened.', 'ok'); }
+
+  function renderTimelineRowSelect() {
+    if (!els.timelineRowSelect) return;
+    els.timelineRowSelect.innerHTML = Array.from({ length: state.grid.rows }, (_, i) => `<option value="${i}">${i}: ${escapeHtml(state.grid.rowLabels[i] || `row_${i+1}`)}</option>`).join('');
+    els.timelineRowSelect.value = clamp(state.timeline.selectedRow ?? state.anim.previewRow ?? 0, 0, Math.max(0, state.grid.rows - 1));
+  }
+
+  function buildTimelineClipFromRow() {
+    const row = clamp(Number(els.timelineRowSelect?.value ?? state.anim.previewRow ?? 0), 0, state.grid.rows - 1);
+    const label = state.grid.rowLabels[row] || `row_${row+1}`;
+    const name = safeName(els.timelineClipName?.value || label || `clip_${row+1}`);
+    const frames = (state.anim.cycle.length ? state.anim.cycle : Array.from({ length: state.grid.cols }, (_, i) => i)).filter(i => i >= 0 && i < state.grid.cols);
+    const fps = intVal(els.timelineFpsInput || els.fpsInput, 1) || state.anim.fps || 8;
+    const clip = { id: uid('clip'), name, row, rowLabel: label, frames, fps, loop: true, durations: frames.map(() => Math.round(1000 / fps)), createdAt: new Date().toISOString() };
+    pushHistory();
+    state.timeline.clips.push(clip);
+    state.timeline.selectedClipId = clip.id;
+    selectObject('timelineClip', clip.id);
+    renderAll();
+    toast(`Timeline clip created: ${name}.`, 'ok');
+  }
+
+  function duplicateTimelineClip() {
+    const clip = state.ui.selected.type === 'timelineClip' ? getSelectedObject() : state.timeline.clips.find(c => c.id === state.timeline.selectedClipId);
+    if (!clip) return toast('Select a timeline clip first.', 'warn');
+    pushHistory();
+    const copy = { ...JSON.parse(JSON.stringify(clip)), id: uid('clip'), name: `${clip.name}_copy`, createdAt: new Date().toISOString() };
+    state.timeline.clips.push(copy);
+    selectObject('timelineClip', copy.id);
+    toast('Timeline clip duplicated.', 'ok');
+  }
+
+  function deleteTimelineClip() { deleteSelection(); }
+
+  function applyTimelineToAnimation() {
+    const clip = state.ui.selected.type === 'timelineClip' ? getSelectedObject() : state.timeline.clips.find(c => c.id === state.timeline.selectedClipId);
+    if (!clip) return toast('Select a timeline clip first.', 'warn');
+    state.anim.previewRow = clip.row;
+    state.anim.fps = clip.fps;
+    state.anim.cycle = [...clip.frames];
+    syncToInputs();
+    setMode('animate');
+    toast(`Applied ${clip.name} to preview.`, 'ok');
+  }
+
+  function toggleOnionSkin() {
+    state.timeline.onionSkin.enabled = !state.timeline.onionSkin.enabled;
+    if (els.onionEnabledInput) els.onionEnabledInput.checked = state.timeline.onionSkin.enabled;
+    draw();
+    toast(`Onion skin ${state.timeline.onionSkin.enabled ? 'enabled' : 'disabled'}.`, 'ok');
+  }
+
+  function buildTimelineManifest() {
+    return { version: VERSION, generatedAt: new Date().toISOString(), onionSkin: state.timeline.onionSkin, clips: state.timeline.clips, rows: state.grid.rowLabels };
+  }
+  function exportTimelineJson() { downloadJson('timeline_clips_v6.json', buildTimelineManifest()); }
+  function exportTimelineZip() {
+    const files = [{ name:'timeline/timeline_clips.json', data:textBytes(pretty(buildTimelineManifest())) }];
+    downloadBlob(createZip(files), 'timeline_package_v6.zip');
+  }
+
+  function renderTimelineLists() {
+    if (els.timelineClipList) {
+      els.timelineClipList.innerHTML = state.timeline.clips.map(c => `<div class="object-row${rowActive('timelineClip',c.id)}" data-type="timelineClip" data-id="${c.id}"><div class="object-main"><strong>${escapeHtml(c.name)}</strong><span>row ${c.row}: ${escapeHtml(c.rowLabel || '')} | ${c.frames.length} frames | ${c.fps} fps | ${c.loop ? 'loop' : 'once'}</span></div><span class="clip-pill">${c.frames.length}</span></div>`).join('') || '<span class="muted">No timeline clips. Add one from the selected row.</span>';
+      wireObjectRows(els.timelineClipList);
+    }
+    if (els.timelineFrameList) {
+      const clip = state.ui.selected.type === 'timelineClip' ? getSelectedObject() : state.timeline.clips.find(c => c.id === state.timeline.selectedClipId) || state.timeline.clips[0];
+      els.timelineFrameList.innerHTML = clip ? clip.frames.map((f, i) => `<div class="timeline-frame"><span>Frame ${i+1}: column ${f}</span><span class="duration-pill">${clip.durations?.[i] ?? Math.round(1000/(clip.fps||8))}ms</span></div>`).join('') : '<span class="muted">Select or create a clip to inspect frame timing.</span>';
+    }
+  }
+
+  function drawOnionSkin(ctx, z) {
+    if (!state.source.image || !state.timeline?.onionSkin?.enabled) return;
+    const skin = state.timeline.onionSkin;
+    const sel = state.ui.selectedFrame || { row:0, col:0 };
+    const dest = frameCell(sel.row, sel.col);
+    const offsets = [];
+    for (let i = skin.prev; i >= 1; i--) offsets.push(-i);
+    for (let i = 1; i <= skin.next; i++) offsets.push(i);
+    ctx.save();
+    ctx.globalAlpha = clamp(Number(skin.opacity || .24), 0, 1);
+    for (const offset of offsets) {
+      const col = sel.col + offset;
+      if (col < 0 || col >= state.grid.cols) continue;
+      const src = frameCell(sel.row, col);
+      ctx.drawImage(state.source.image, src.x, src.y, src.w, src.h, dest.x*z, dest.y*z, dest.w*z, dest.h*z);
+    }
+    ctx.restore();
+  }
+
+  function selectedPartTransform() {
+    const part = state.ui.selected.type === 'part' ? getSelectedObject() : null;
+    if (!part) return null;
+    if (!state.posePreview.transforms[part.id]) state.posePreview.transforms[part.id] = { partId: part.id, partName: part.name, rotation: 0, x: 0, y: 0, scale: 1 };
+    return state.posePreview.transforms[part.id];
+  }
+  function testRotateSelectedPartLeft() { const t = selectedPartTransform(); if (!t) return toast('Select a rig part first.', 'warn'); t.rotation -= 15; renderAll(); toast(`Part rotation: ${t.rotation}°`, 'ok'); }
+  function testRotateSelectedPartRight() { const t = selectedPartTransform(); if (!t) return toast('Select a rig part first.', 'warn'); t.rotation += 15; renderAll(); toast(`Part rotation: ${t.rotation}°`, 'ok'); }
+  function resetPartTransform() { const t = selectedPartTransform(); if (!t) return toast('Select a rig part first.', 'warn'); Object.assign(t, { rotation: 0, x: 0, y: 0, scale: 1 }); renderAll(); toast('Part transform reset.', 'ok'); }
+
+  function savePose() {
+    const part = state.ui.selected.type === 'part' ? getSelectedObject() : null;
+    if (!part) return toast('Select a rig part before saving a pose.', 'warn');
+    const transform = selectedPartTransform();
+    const pose = { id: uid('pose'), name: safeName(els.poseNameInput?.value || `${part.name}_pose`), createdAt: new Date().toISOString(), frame: { row: part.row, col: part.col }, transforms: { [part.id]: { ...transform } } };
+    pushHistory();
+    state.poseLibrary.push(pose);
+    selectObject('pose', pose.id);
+    renderAll();
+    toast(`Pose saved: ${pose.name}.`, 'ok');
+  }
+  function deletePose() { deleteSelection(); }
+  function exportPoseLibrary() { downloadJson('pose_library_v6.json', { version: VERSION, poses: state.poseLibrary }); }
+
+  function renderPoseLists() {
+    if (els.posePartList) {
+      const part = state.ui.selected.type === 'part' ? getSelectedObject() : null;
+      const t = part ? selectedPartTransform() : null;
+      els.posePartList.innerHTML = part ? `<div class="pose-transform"><span>${escapeHtml(part.name)} | ${escapeHtml(part.category)}</span><span class="duration-pill">rot ${t.rotation}°</span></div>` : '<span class="muted">Select a rig part to test its pose.</span>';
+    }
+    if (els.poseList) {
+      els.poseList.innerHTML = state.poseLibrary.map(p => `<div class="object-row${rowActive('pose',p.id)}" data-type="pose" data-id="${p.id}"><div class="object-main"><strong>${escapeHtml(p.name)}</strong><span>${Object.keys(p.transforms || {}).length} transform(s) | frame ${p.frame?.row ?? 0}:${p.frame?.col ?? 0}</span></div></div>`).join('') || '<span class="muted">No saved poses yet.</span>';
+      wireObjectRows(els.poseList);
+    }
+  }
+
+  function generateRemapPreview() {
+    const target = els.remapLayoutSelect?.value || state.remap.target || 'godot_folders';
+    state.remap.target = target;
+    const plan = buildFrameManifest().map(f => ({ ...f, targetLayout: target, targetPath: remapPath(target, f) }));
+    state.remap.plan = plan;
+    renderRemapPreview();
+    toast(`Generated ${plan.length} remap entries for ${target}.`, 'ok');
+  }
+  function remapPath(target, frame) {
+    const base = safeName(state.grid.baseName || 'sprite');
+    const row = safeName(frame.label || `row_${frame.row+1}`);
+    const col = String(frame.col + 1).padStart(2, '0');
+    if (target === 'godot_folders') return `godot/${row}/${row}_${col}.png`;
+    if (target === 'rpg_maker_mz') return `rpg_maker_mz/${base}_${String(frame.row+1).padStart(2,'0')}_${col}.png`;
+    if (target === 'lpc_idle_4dir') return `lpc_idle/${row}/${row}_${col}.png`;
+    if (target === 'keter_runtime') return `keter/animations/${row}/${base}_${row}_${col}.png`;
+    return `frames/${row}/${base}_${row}_${col}.png`;
+  }
+  function exportRemapPlan() { if (!state.remap.plan?.length) generateRemapPreview(); downloadJson('sheet_remap_plan_v6.json', state.remap); }
+  function renderRemapPreview() {
+    if (!els.remapPreviewList) return;
+    const rows = (state.remap.plan || []).slice(0, 80);
+    els.remapPreviewList.innerHTML = rows.map(r => `<div class="remap-row"><span>${escapeHtml(r.label)} ${r.row}:${r.col}</span><span>${escapeHtml(r.targetPath)}</span></div>`).join('') || '<span class="muted">Generate a remap plan to preview target paths.</span>';
+  }
+
+  function packAtlas() {
+    state.atlas.manifest = buildAtlasManifest();
+    state.atlas.frames = state.atlas.manifest.frames;
+    renderAtlasPreview();
+    toast(`Atlas preview packed: ${state.atlas.frames.length} frames.`, 'ok');
+  }
+  function buildAtlasManifest() {
+    const padding = Number(state.atlas.padding ?? 2);
+    const maxWidth = Math.max(Number(state.atlas.maxWidth ?? 1024), state.grid.frameW + padding * 2);
+    let x = padding, y = padding, rowH = 0;
+    const frames = [];
+    for (const f of buildFrameManifest()) {
+      const w = state.grid.frameW, h = state.grid.frameH;
+      if (x + w + padding > maxWidth) { x = padding; y += rowH + padding; rowH = 0; }
+      frames.push({ name: `${safeName(f.label)}_${String(f.col+1).padStart(2,'0')}`, source: f, atlas: { x, y, w, h } });
+      x += w + padding;
+      rowH = Math.max(rowH, h);
+    }
+    const width = maxWidth;
+    const height = y + rowH + padding;
+    return { version: VERSION, name: state.atlas.name || 'sprite_atlas', generatedAt: new Date().toISOString(), width, height, padding, frames };
+  }
+  function exportAtlasManifest() { if (!state.atlas.manifest) packAtlas(); downloadJson('atlas_manifest_v6.json', state.atlas.manifest); }
+  function renderAtlasPreview() {
+    if (!els.atlasPreviewList) return;
+    const manifest = state.atlas.manifest;
+    if (!manifest) { els.atlasPreviewList.innerHTML = '<span class="muted">Pack an atlas preview to see frame placement.</span>'; return; }
+    els.atlasPreviewList.innerHTML = `<div class="atlas-cell"><span>${escapeHtml(manifest.name)} | ${manifest.width}×${manifest.height} | ${manifest.frames.length} frames</span><span class="atlas-pill">v6</span></div>` + manifest.frames.slice(0, 60).map(f => `<div class="atlas-cell"><span>${escapeHtml(f.name)}</span><span>${f.atlas.x},${f.atlas.y}</span></div>`).join('');
+  }
+
+  function buildRuntimeBundle() {
+    const atlas = state.atlas.manifest || buildAtlasManifest();
+    return {
+      version: VERSION,
+      generatedAt: new Date().toISOString(),
+      source: { name: state.source.name, width: state.source.width, height: state.source.height },
+      grid: state.grid,
+      exportProfile: state.profiles[state.export.profileId],
+      frames: buildFrameManifest(),
+      timeline: buildTimelineManifest(),
+      pivots: state.pivots,
+      parts: state.parts,
+      atlas,
+      remap: state.remap,
+      qa: { summary: summarizeDiagnostics(), visualDiff: state.visualDiff }
+    };
+  }
+  function exportRuntimeBundle() {
+    state.runtimeBundle.lastBuilt = new Date().toISOString();
+    const bundle = buildRuntimeBundle();
+    downloadJson('runtime_bundle_v6.json', bundle);
+    toast('Runtime bundle exported.', 'ok');
+  }
+  function exportRuntimeZip() {
+    state.runtimeBundle.lastBuilt = new Date().toISOString();
+    const files = [
+      { name:'runtime/runtime_bundle.json', data:textBytes(pretty(buildRuntimeBundle())) },
+      { name:'runtime/atlas_manifest.json', data:textBytes(pretty(state.atlas.manifest || buildAtlasManifest())) },
+      { name:'runtime/timeline_clips.json', data:textBytes(pretty(buildTimelineManifest())) },
+      { name:'runtime/remap_plan.json', data:textBytes(pretty(state.remap.plan || [])) },
+      { name:'runtime/pose_library.json', data:textBytes(pretty(state.poseLibrary || [])) }
+    ];
+    downloadBlob(createZip(files), 'runtime_bundle_v6.zip');
+  }
+
+  function runTimelineValidator(markSource = true) {
+    const add = (status, message) => state.qa.diagnostics.push({ status, message, source: 'Timeline Lab' });
+    if (!state.timeline.clips.length) { add('warning', 'No timeline clips have been created. Runtime export will fall back to row-based clips.'); return; }
+    for (const clip of state.timeline.clips) {
+      if (!clip.frames?.length) add('fail', `Timeline clip ${clip.name} has no frames.`);
+      if (clip.row < 0 || clip.row >= state.grid.rows) add('fail', `Timeline clip ${clip.name} references row ${clip.row}, outside the current grid.`);
+      const bad = (clip.frames || []).filter(f => f < 0 || f >= state.grid.cols);
+      if (bad.length) add('fail', `Timeline clip ${clip.name} has out-of-range frame columns: ${bad.join(', ')}.`);
+      const durations = clip.durations || [];
+      if (durations.some(d => d <= 0)) add('fail', `Timeline clip ${clip.name} has zero/negative frame duration.`);
+      const min = Math.min(...durations), max = Math.max(...durations);
+      if (Number.isFinite(min) && Number.isFinite(max) && max > min * 3) add('warning', `Timeline clip ${clip.name} has large duration variance (${min}-${max}ms).`);
+      if (!bad.length && clip.frames?.length) add('pass', `Timeline clip ${clip.name} is valid.`);
+    }
+  }
+
 })();

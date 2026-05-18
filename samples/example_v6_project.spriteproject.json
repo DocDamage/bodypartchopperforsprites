@@ -1,0 +1,110 @@
+{
+  "type": "doc_sprite_slicer_studio_project",
+  "version": "6.0.0",
+  "projectFormatVersion": 6,
+  "source": {
+    "name": "example_v6_sheet.png",
+    "width": 256,
+    "height": 256
+  },
+  "grid": {
+    "cols": 4,
+    "rows": 4,
+    "frameW": 64,
+    "frameH": 64,
+    "marginX": 0,
+    "marginY": 0,
+    "spacingX": 0,
+    "spacingY": 0,
+    "rowLabels": [
+      "idle_up",
+      "idle_left",
+      "idle_down",
+      "idle_right"
+    ],
+    "directionLabels": [
+      "up",
+      "left",
+      "down",
+      "right"
+    ],
+    "baseName": "example_v6"
+  },
+  "export": {
+    "profileId": "generic",
+    "scale": 1,
+    "smoothing": false,
+    "folderByRow": true,
+    "includeSource": true,
+    "includeCredits": true
+  },
+  "qa": {
+    "blockFailures": true,
+    "allowWarnings": true,
+    "diagnostics": [],
+    "lastRun": null
+  },
+  "parts": [],
+  "pivots": [],
+  "layers": [],
+  "library": [],
+  "recipe": {
+    "id": "example_v6_character",
+    "name": "Example V6 Character",
+    "base": "",
+    "layers": [],
+    "palette": "",
+    "exportProfile": "generic",
+    "directionOrderOverrides": {},
+    "notes": ""
+  },
+  "batch": [],
+  "profiles": {},
+  "pluginsEnabled": {},
+  "timeline": {
+    "clips": [
+      {
+        "id": "clip_idle_down",
+        "name": "idle_down",
+        "row": 2,
+        "rowLabel": "idle_down",
+        "frames": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "fps": 8,
+        "loop": true,
+        "durations": [
+          125,
+          125,
+          125,
+          125
+        ]
+      }
+    ],
+    "selectedClipId": "clip_idle_down",
+    "onionSkin": {
+      "enabled": false,
+      "prev": 1,
+      "next": 1,
+      "opacity": 0.24
+    }
+  },
+  "poseLibrary": [],
+  "remap": {
+    "target": "godot_folders",
+    "plan": []
+  },
+  "atlas": {
+    "name": "example_v6_atlas",
+    "padding": 2,
+    "maxWidth": 1024,
+    "frames": [],
+    "manifest": null
+  },
+  "runtimeBundle": {
+    "lastBuilt": null
+  }
+}
