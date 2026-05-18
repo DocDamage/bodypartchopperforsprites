@@ -1,0 +1,23 @@
+{
+  "name": "bodypartchopperforsprites",
+  "version": "6.0.0",
+  "private": true,
+  "description": "Doc Sprite Slicer Studio v6: offline spritesheet slicing, body-part chopping, rig prep, asset library, animation lab, QA, and export tooling.",
+  "type": "module",
+  "scripts": {
+    "test": "node tests/static-smoke-test.mjs",
+    "serve": "node scripts/static-server.mjs",
+    "check": "npm test"
+  },
+  "keywords": [
+    "spritesheet",
+    "pixel-art",
+    "rigging",
+    "godot",
+    "rpg-maker-mz",
+    "keterengine",
+    "lpc"
+  ],
+  "license": "UNLICENSED",
+  "devDependencies": {}
+}
