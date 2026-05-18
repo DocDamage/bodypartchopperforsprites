@@ -6,6 +6,7 @@ const testFiles = [
   'tests/lab-module-test.mjs',
   'tests/runtime-shell-test.mjs',
   'tests/storage-bridge-test.mjs',
+  'tests/library-storage-adapter-test.mjs',
   'tests/importer-module-test.mjs'
 ];
 
