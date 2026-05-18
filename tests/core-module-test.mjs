@@ -1,10 +1,13 @@
-import { APP_VERSION, PROJECT_FORMAT_VERSION, CATEGORIES, LPC_ROW_LABELS, safeName } from '../src/core/constants.js';
+import { APP_VERSION, PROJECT_FORMAT_VERSION, CATEGORIES, LPC_ROW_LABELS, safeName, STORAGE_KEYS } from '../src/core/constants.js';
 import { DEFAULT_PROFILES, getProfile, resolveProfilePath } from '../src/exporters/profile-defaults.js';
 import { buildFrameManifest, buildFramePath, buildAnimationManifest, buildExportPreview, inferAnimation, inferDirection } from '../src/exporters/manifest.js';
 import { buildCredits, csvEscape } from '../src/exporters/credits.js';
 import { BUILTIN_PLUGINS, DEFAULT_PLUGIN_SETTINGS, normalizePluginSettings } from '../src/plugins/builtin-plugins.js';
 import { createDefaultGrid, createDefaultProjectState } from '../src/state/default-state.js';
 import { PROJECT_SCHEMA, createProjectSnapshot, migrateProject } from '../src/state/project-format.js';
+import { readJson, writeJson, mergeAssets, loadLibrary, saveLibrary, loadPluginSettings, savePluginSettings, saveAutosaveSnapshot, readRecoveryState, clearRecoveryState } from '../src/state/storage.js';
+import { createHistoryState, pushHistory, canUndo, canRedo, popUndo, popRedo } from '../src/state/history.js';
+import { buildBackupFileName, buildRecoveryPackageFiles } from '../src/state/backup.js';
 import { frameCell, frameFromPoint, rectFromPoints, bboxOfPoints, detectGridFromImageSize, makeDefaultRowLabels } from '../src/canvas/frame-utils.js';
 import { createDiagnostic, countDiagnostics, checkQaGate, summarizeDiagnostics, maxRange } from '../src/validators/diagnostics.js';
 import { validateProjectIntegrity } from '../src/validators/project-integrity.js';
@@ -19,6 +22,15 @@ function assert(condition, message) {
   } else {
     console.log(`PASS: ${message}`);
   }
+}
+
+function createMemoryStorage() {
+  const map = new Map();
+  return {
+    getItem: (key) => map.has(key) ? map.get(key) : null,
+    setItem: (key, value) => map.set(key, String(value)),
+    removeItem: (key) => map.delete(key)
+  };
 }
 
 assert(APP_VERSION === '7.0.0', 'core version is v7');
@@ -51,6 +63,30 @@ state.source.dataUrl = 'data:image/png;base64,stub';
 assert(state.version === '7.0.0', 'default state reports v7');
 assert(state.profiles.generic.id === 'generic', 'default state includes profiles');
 assert(state.plugins.enabled['importer.generic_spritesheet'] === true, 'default state includes plugin settings');
+
+const storage = createMemoryStorage();
+writeJson(storage, 'example', { ok: true });
+assert(readJson(storage, 'example', {}).ok === true, 'storage read/write JSON works');
+assert(mergeAssets([{ id: 'a', name: 'old' }], [{ id: 'a', name: 'new' }, { id: 'b' }]).length === 2, 'mergeAssets deduplicates by id');
+saveLibrary(storage, [{ id: 'asset_1' }]);
+assert(loadLibrary(storage)[0].id === 'asset_1', 'library storage round trips');
+savePluginSettings(storage, { 'validator.visual_diff': false });
+assert(loadPluginSettings(storage)['validator.visual_diff'] === false, 'plugin settings storage round trips');
+const autosaveResult = saveAutosaveSnapshot(storage, createProjectSnapshot(state), STORAGE_KEYS, { slotId: 'slot_test' });
+assert(autosaveResult.slotCount === 1, 'autosave creates slot');
+assert(readRecoveryState(storage).autosaveSlots[0].id === 'slot_test', 'recovery state exposes autosave slot');
+clearRecoveryState(storage);
+assert(readRecoveryState(storage).autosaveSlots.length === 0, 'recovery state clears autosave slots');
+
+const history = createHistoryState(3);
+pushHistory(history, { step: 1 });
+pushHistory(history, { step: 2 });
+assert(canUndo(history), 'history can undo');
+assert(popUndo(history, { step: 3 }).step === 2, 'history pops undo snapshot');
+assert(canRedo(history), 'history can redo after undo');
+assert(popRedo(history, { step: 2 }).step === 3, 'history pops redo snapshot');
+assert(buildBackupFileName(state, '2026-05-18T19:00:00.000Z').includes('the_ronin_backup'), 'backup filename uses project base name');
+assert(buildRecoveryPackageFiles({ currentProject: {}, recoveryState: {}, pluginManifest: {} }).length === 6, 'recovery package file manifest has expected files');
 
 const framePath = buildFramePath({ grid: state.grid, profiles: state.profiles, exportSettings: state.export, row: 2, col: 0 });
 assert(framePath === 'keter/frames/idle_down/the_ronin_idle_down_01.png', 'buildFramePath uses active profile');
