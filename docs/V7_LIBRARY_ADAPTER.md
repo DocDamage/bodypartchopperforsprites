@@ -20,11 +20,22 @@ The adapter provides a tested compatibility layer first:
 - merges records by asset id
 - writes the merged result to the canonical V7 key
 - mirrors the result back to the legacy v6 key so existing app behavior remains intact
-- can attach itself to `DocSpriteSlicerV7` when the runtime shell exists
+- attaches to `DocSpriteSlicerV7` through the runtime shell
+
+## Runtime shell exposure
+
+The runtime shell now creates the adapter during boot and exposes:
+
+```text
+window.DocSpriteSlicerV7.libraryStorageAdapter
+window.DocSpriteSlicerV7.libraryStorageStatus
+```
+
+On boot, the shell calls the adapter sync path so existing legacy v6 library data is copied into the V7 canonical key while the v6 key remains populated for legacy `app.js` behavior.
 
 ## Compatibility rule
 
-This pass does not change `app.js` behavior and does not modify `index.html`. The adapter is intentionally module/test/doc only so the next integration pass can wire it into the page or legacy functions with a much smaller diff.
+This pass does not change `app.js` behavior and does not modify `index.html`. The adapter is exposed through the already-loaded runtime shell, so the next integration pass can replace legacy functions with a much smaller diff.
 
 ## Test coverage
 
@@ -37,8 +48,14 @@ The adapter test covers:
 - global/runtime-shell attachment behavior
 - unavailable-storage fallback behavior
 
+The runtime-shell test covers:
+
+- creating a library adapter with and without browser-like storage
+- exposing library adapter status
+- syncing legacy library records into canonical storage during shell boot
+
 ## Next integration options
 
-1. Load the adapter from `index.html` before `app.js`, then manually verify legacy library import/export still works.
-2. Replace only `loadLibraryFromStorage()` and `saveLibraryToStorage()` in `app.js` with adapter calls.
+1. Replace only `loadLibraryFromStorage()` and `saveLibraryToStorage()` in `app.js` with adapter calls.
+2. Manually verify library import/export, part-save-to-library, and asset-pack import still work.
 3. After parity is proven, remove legacy library constants from `app.js`.
