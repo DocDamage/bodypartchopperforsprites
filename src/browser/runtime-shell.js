@@ -2,11 +2,13 @@ import { APP_VERSION, PROJECT_FORMAT_VERSION } from '../core/constants.js';
 import { createDefaultProjectState } from '../state/default-state.js';
 import { PROJECT_SCHEMA } from '../state/project-format.js';
 import { BUILTIN_PLUGINS, DEFAULT_PLUGIN_SETTINGS } from '../plugins/builtin-plugins.js';
+import { createLibraryStorageAdapter } from './library-storage-adapter.js';
 import { buildStorageStatus, createStorageBridge } from './storage-bridge.js';
 
 export function createRuntimeShell(options = {}) {
   const state = options.state || createDefaultProjectState();
   const storageBridge = options.storageBridge || createStorageBridge({ target: options.target, storage: options.storage });
+  const libraryStorageAdapter = options.libraryStorageAdapter || createLibraryStorageAdapter({ target: options.target, storage: options.storage });
   const shell = {
     version: APP_VERSION,
     projectFormatVersion: PROJECT_FORMAT_VERSION,
@@ -16,6 +18,8 @@ export function createRuntimeShell(options = {}) {
     pluginSettings: { ...DEFAULT_PLUGIN_SETTINGS, ...(options.pluginSettings || {}) },
     storageBridge,
     storageStatus: buildStorageStatus(storageBridge),
+    libraryStorageAdapter,
+    libraryStorageStatus: libraryStorageAdapter.status(),
     bootedAt: options.bootedAt || new Date().toISOString(),
     legacyRuntime: Boolean(options.legacyRuntime)
   };
@@ -41,8 +45,16 @@ export function patchLegacyBrand(documentRef, version = APP_VERSION) {
   return true;
 }
 
+export function syncShellLibraryStorage(shell) {
+  if (!shell?.libraryStorageAdapter?.available) return shell?.libraryStorageStatus || null;
+  shell.libraryStorageAdapter.syncLibraryStorage();
+  shell.libraryStorageStatus = shell.libraryStorageAdapter.status();
+  return shell.libraryStorageStatus;
+}
+
 export function bootRuntimeShell({ target = globalThis, documentRef = target.document, legacyRuntime = true } = {}) {
   const shell = attachRuntimeShell(target, createRuntimeShell({ target, legacyRuntime }));
+  syncShellLibraryStorage(shell);
   patchLegacyBrand(documentRef, shell.version);
   return shell;
 }
