@@ -11,6 +11,7 @@ const testFiles = [
   'tests/plugin-settings-codemod-test.mjs',
   'tests/save-state-codemod-test.mjs',
   'tests/comma-delimited-inputs-codemod-test.mjs',
+  'tests/project-format-codemod-test.mjs',
   'tests/importer-module-test.mjs'
 ];
 
