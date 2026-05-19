@@ -32,7 +32,7 @@ const appFixture = `import { createStorageBridge } from './src/browser/storage-b
   const PROJECT_SCHEMA_V6 = {
     type:'doc_sprite_slicer_studio_project',
     projectFormatVersion:6,
-    required:['version']
+    required:['version','source','grid','export','qa','parts','pivots','library','recipe','batch','profiles','pluginsEnabled','timeline','poseLibrary','remap','atlas']
   };
 
 ${legacySnapshotBlock}
