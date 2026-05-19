@@ -49,6 +49,17 @@ const mixed = mixedAdapter.syncLibraryStorage();
 assert(mixed.length === 2, 'adapter merges canonical and legacy assets');
 assert(mixed.find((asset) => asset.id === 'asset_a').name === 'A Override', 'adapter lets later legacy assets update matching ids during merge');
 
+const syncStorage = createMemoryStorage();
+const syncTarget = { localStorage: syncStorage, DocSpriteSlicerV7: {} };
+const syncAdapter = installLibraryStorageAdapter(syncTarget);
+assert(syncAdapter.status().legacyWriteSyncInstalled === true, 'installLibraryStorageAdapter installs legacy write sync');
+syncStorage.setItem(STORAGE_KEYS.legacyLibraryV6, JSON.stringify([{ id: 'write_sync_asset', name: 'Write Sync Hair' }]));
+assert(readJson(syncStorage, STORAGE_KEYS.library, []).some((asset) => asset.id === 'write_sync_asset'), 'legacy v6 library writes sync to canonical V7 key');
+assert(syncTarget.DocSpriteSlicerV7.libraryStorageStatus.canonicalAssets === 1, 'legacy write sync updates shell library status');
+
+syncStorage.setItem(STORAGE_KEYS.library, JSON.stringify([{ id: 'canonical_write_asset', name: 'Canonical Cloak' }]));
+assert(readJson(syncStorage, STORAGE_KEYS.legacyLibraryV6, []).some((asset) => asset.id === 'canonical_write_asset'), 'canonical V7 library writes sync to legacy v6 key');
+
 const target = { localStorage: createMemoryStorage(), DocSpriteSlicerV7: {} };
 target.localStorage.setItem(STORAGE_KEYS.legacyLibraryV6, JSON.stringify([{ id: 'installed_asset', name: 'Installed' }]));
 const installed = installLibraryStorageAdapter(target);
@@ -60,5 +71,6 @@ assert(readJson(target.localStorage, STORAGE_KEYS.library, []).length === 1, 'in
 const unavailable = createLibraryStorageAdapter({ storage: null });
 assert(unavailable.available === false, 'adapter reports unavailable storage');
 assert(unavailable.loadCanonicalLibrary().length === 0, 'unavailable adapter returns empty library');
+assert(unavailable.installLegacyWriteSync({}) === false, 'unavailable adapter does not install legacy write sync');
 
 if (process.exitCode) process.exit(process.exitCode);
