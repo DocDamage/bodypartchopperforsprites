@@ -6,6 +6,7 @@ import {
 } from './src/core/constants.js';
 import { createLibraryStorageAdapter } from './src/browser/library-storage-adapter.js';
 import { createStorageBridge } from './src/browser/storage-bridge.js';
+import { createProjectSnapshot as createV7ProjectSnapshot, migrateProject as migrateV7Project } from './src/state/project-format.js';
 
 (() => {
   'use strict';
@@ -67,11 +68,6 @@ import { createStorageBridge } from './src/browser/storage-bridge.js';
 
   const DEFAULT_PLUGIN_SETTINGS = Object.fromEntries(BUILTIN_PLUGINS.map(p => [p.id, true]));
 
-  const PROJECT_SCHEMA_V6 = {
-    type:'doc_sprite_slicer_studio_project',
-    projectFormatVersion:6,
-    required:['version','source','grid','export','qa','parts','pivots','library','recipe','batch','profiles','pluginsEnabled','timeline','poseLibrary','remap','atlas']
-  };
 
   const state = {
     version: VERSION,
@@ -465,14 +461,7 @@ import { createStorageBridge } from './src/browser/storage-bridge.js';
   }
 
   function projectSnapshot(includeLibrary = false) {
-    return {
-      type: 'doc_sprite_slicer_studio_project', version: VERSION, projectFormatVersion: 6, savedAt: new Date().toISOString(),
-      source: state.export.includeSource ? { name: state.source.name, dataUrl: state.source.dataUrl, width: state.source.width, height: state.source.height } : { name: state.source.name, width: state.source.width, height: state.source.height },
-      grid: state.grid, view: state.view, export: state.export, qa: state.qa,
-      parts: state.parts, pivots: state.pivots, layers: state.layers,
-      library: includeLibrary ? state.library : undefined, includeLibrary,
-      recipe: state.recipe, batch: state.batch, batchLogs: state.batchLogs, profiles: state.profiles, credits: state.credits, palette: state.palette, pluginsEnabled: state.plugins.enabled, timeline: state.timeline, poseLibrary: state.poseLibrary, posePreview: state.posePreview, remap: state.remap, atlas: state.atlas, runtimeBundle: state.runtimeBundle, migrationReport: state.migrationReport, schema: PROJECT_SCHEMA_V6
-    };
+    return createV7ProjectSnapshot(state, { includeLibrary });
   }
 
   function saveProject() {
@@ -1287,36 +1276,7 @@ import { createStorageBridge } from './src/browser/storage-bridge.js';
   }
 
   function migrateProject(project = {}) {
-    const report = [];
-    const from = Number(project.projectFormatVersion || String(project.version || '').match(/^(\d+)/)?.[1] || 1);
-    const migrated = { ...project };
-    if (from < 5) report.push(`Migrated project from v${from || 'unknown'} to v6 schema.`);
-    migrated.projectFormatVersion = 6;
-    migrated.version = VERSION;
-    migrated.type = 'doc_sprite_slicer_studio_project';
-    migrated.grid = { cols:13, rows:4, frameW:64, frameH:64, marginX:0, marginY:0, spacingX:0, spacingY:0, rowLabels:['up','left','down','right'], directionLabels:['up','left','down','right'], baseName:'sprite', ...(migrated.grid || {}) };
-    migrated.export = { profileId:'generic', scale:1, smoothing:false, folderByRow:true, includeSource:true, includeCredits:true, ...(migrated.export || {}) };
-    migrated.qa = { blockFailures:true, allowWarnings:true, diagnostics:[], lastRun:null, ...(migrated.qa || {}) };
-    migrated.parts = Array.isArray(migrated.parts) ? migrated.parts : [];
-    migrated.pivots = Array.isArray(migrated.pivots) ? migrated.pivots : [];
-    migrated.layers = Array.isArray(migrated.layers) ? migrated.layers : [];
-    migrated.library = Array.isArray(migrated.library) ? migrated.library : [];
-    migrated.recipe = { id:'new_character', name:'New Character', base:'', layers:[], palette:'', exportProfile:migrated.export.profileId || 'generic', directionOrderOverrides:{}, notes:'', ...(migrated.recipe || {}) };
-    migrated.batch = Array.isArray(migrated.batch) ? migrated.batch : [];
-    migrated.batchLogs = Array.isArray(migrated.batchLogs) ? migrated.batchLogs : [];
-    migrated.profiles = { ...DEFAULT_PROFILES, ...(migrated.profiles || {}) };
-    migrated.credits = Array.isArray(migrated.credits) ? migrated.credits : [];
-    migrated.palette = Array.isArray(migrated.palette) ? migrated.palette : [];
-    migrated.pluginsEnabled = { ...DEFAULT_PLUGIN_SETTINGS, ...(migrated.pluginsEnabled || migrated.plugins?.enabled || {}) };
-    migrated.timeline = migrated.timeline || { clips: [], selectedClipId: '', onionSkin: { enabled:false, prev:1, next:1, opacity:.24 } };
-    migrated.poseLibrary = Array.isArray(migrated.poseLibrary) ? migrated.poseLibrary : [];
-    migrated.posePreview = migrated.posePreview || { transforms: {} };
-    migrated.remap = migrated.remap || { target: 'godot_folders', plan: [] };
-    migrated.atlas = migrated.atlas || { name: 'sprite_atlas', padding: 2, maxWidth: 1024, frames: [], manifest: null };
-    migrated.runtimeBundle = migrated.runtimeBundle || { lastBuilt: null };
-    migrated.migrationReport = [...(migrated.migrationReport || []), ...report];
-    state.migrationReport = migrated.migrationReport;
-    return migrated;
+    return migrateV7Project(project);
   }
 
   function saveAutosaveSnapshot() {
