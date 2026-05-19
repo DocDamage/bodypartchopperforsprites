@@ -31,6 +31,18 @@ export function attachRuntimeShell(target = globalThis, shell = createRuntimeShe
   return shell;
 }
 
+export function installHiddenAttributeGuard(documentRef) {
+  if (!documentRef) return false;
+  if (documentRef.getElementById?.('v7-hidden-attribute-guard')) return false;
+  const style = documentRef.createElement?.('style');
+  if (!style) return false;
+  style.id = 'v7-hidden-attribute-guard';
+  style.textContent = '[hidden] { display: none !important; }';
+  const target = documentRef.head || documentRef.documentElement;
+  target?.appendChild?.(style);
+  return true;
+}
+
 export function patchLegacyBrand(documentRef, version = APP_VERSION) {
   if (!documentRef) return false;
   documentRef.title = `Doc Sprite Slicer Studio v${version.split('.')[0]}`;
@@ -53,6 +65,7 @@ export function syncShellLibraryStorage(shell) {
 }
 
 export function bootRuntimeShell({ target = globalThis, documentRef = target.document, legacyRuntime = true } = {}) {
+  installHiddenAttributeGuard(documentRef);
   const shell = attachRuntimeShell(target, createRuntimeShell({ target, legacyRuntime }));
   syncShellLibraryStorage(shell);
   patchLegacyBrand(documentRef, shell.version);
@@ -60,6 +73,7 @@ export function bootRuntimeShell({ target = globalThis, documentRef = target.doc
 }
 
 if (typeof window !== 'undefined') {
+  installHiddenAttributeGuard(window.document);
   window.addEventListener('DOMContentLoaded', () => {
     bootRuntimeShell({ target: window, documentRef: window.document, legacyRuntime: true });
   }, { once: true });
