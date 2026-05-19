@@ -5,6 +5,7 @@ import {
   safeName as coreSafeName
 } from './src/core/constants.js';
 import { createLibraryStorageAdapter } from './src/browser/library-storage-adapter.js';
+import { createStorageBridge } from './src/browser/storage-bridge.js';
 
 (() => {
   'use strict';
@@ -22,6 +23,7 @@ import { createLibraryStorageAdapter } from './src/browser/library-storage-adapt
   const LPC_ROW_LABELS = CORE_LPC_ROW_LABELS;
 
   const libraryStorageAdapter = createLibraryStorageAdapter({ target: window });
+  const v7StorageBridge = createStorageBridge({ target: window });
 
   const DEFAULT_PROFILES = {
     generic: {
@@ -873,8 +875,7 @@ import { createLibraryStorageAdapter } from './src/browser/library-storage-adapt
   function loadLibraryFromStorage() {
     try {
       state.library = libraryStorageAdapter.loadCanonicalLibrary();
-      const rawPlugins = localStorage.getItem(PLUGIN_SETTINGS_KEY);
-      if (rawPlugins) state.plugins.enabled = { ...DEFAULT_PLUGIN_SETTINGS, ...JSON.parse(rawPlugins) };
+      state.plugins.enabled = v7StorageBridge.loadPluginSettings();
       if (window.DocSpriteSlicerV7) window.DocSpriteSlicerV7.libraryStorageStatus = libraryStorageAdapter.status();
     } catch {
       state.library = [];
@@ -1257,7 +1258,15 @@ import { createLibraryStorageAdapter } from './src/browser/library-storage-adapt
   // ---------------- V6 production-hardening layer ----------------
   function isPluginEnabled(id) { return state.plugins?.enabled?.[id] !== false; }
   function pluginBadge(plugin) { return isPluginEnabled(plugin.id) ? 'enabled' : 'disabled'; }
-  function savePluginSettings() { try { localStorage.setItem(PLUGIN_SETTINGS_KEY, JSON.stringify(state.plugins.enabled)); } catch {} }
+  function savePluginSettings() {
+    try {
+      v7StorageBridge.savePluginSettings(state.plugins.enabled);
+      if (window.DocSpriteSlicerV7) {
+        window.DocSpriteSlicerV7.pluginSettings = v7StorageBridge.loadPluginSettings();
+        window.DocSpriteSlicerV7.storageStatus = window.DocSpriteSlicerV7.storageBridge?.readRecoveryState ? window.DocSpriteSlicerV7.storageStatus : window.DocSpriteSlicerV7.storageStatus;
+      }
+    } catch {}
+  }
 
   function migrateProject(project = {}) {
     const report = [];
