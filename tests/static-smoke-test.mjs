@@ -47,7 +47,7 @@ assert(runtimeShell.includes('bootRuntimeShell'), 'runtime shell exposes boot he
 assert(runtimeShell.includes('DocSpriteSlicerV7'), 'runtime shell exposes global bridge marker');
 
 try {
-  const appScriptBody = app.replace(/^import[\s\S]*?;\n\n/, '');
+  const appScriptBody = app.replace(/^(?:import[\s\S]*?;\n\s*)+/, '');
   new vm.Script(appScriptBody, { filename: 'app.js' });
   console.log('PASS: app.js parses as JavaScript');
 } catch (error) {

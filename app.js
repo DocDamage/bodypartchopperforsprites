@@ -4,6 +4,7 @@ import {
   LPC_ROW_LABELS as CORE_LPC_ROW_LABELS,
   safeName as coreSafeName
 } from './src/core/constants.js';
+import { createLibraryStorageAdapter } from './src/browser/library-storage-adapter.js';
 
 (() => {
   'use strict';
@@ -19,6 +20,8 @@ import {
 
   const CATEGORIES = CORE_CATEGORIES;
   const LPC_ROW_LABELS = CORE_LPC_ROW_LABELS;
+
+  const libraryStorageAdapter = createLibraryStorageAdapter({ target: window });
 
   const DEFAULT_PROFILES = {
     generic: {
@@ -869,13 +872,21 @@ import {
 
   function loadLibraryFromStorage() {
     try {
-      state.library = JSON.parse(localStorage.getItem(LIBRARY_KEY) || localStorage.getItem(V6_LIBRARY_KEY) || '[]');
+      state.library = libraryStorageAdapter.loadCanonicalLibrary();
       const rawPlugins = localStorage.getItem(PLUGIN_SETTINGS_KEY);
       if (rawPlugins) state.plugins.enabled = { ...DEFAULT_PLUGIN_SETTINGS, ...JSON.parse(rawPlugins) };
-    } catch { state.library = []; }
+      if (window.DocSpriteSlicerV7) window.DocSpriteSlicerV7.libraryStorageStatus = libraryStorageAdapter.status();
+    } catch {
+      state.library = [];
+    }
   }
   function saveLibraryToStorage() {
-    try { localStorage.setItem(LIBRARY_KEY, JSON.stringify(state.library)); } catch (err) { toast('Library is too large for browser local storage. Export it as JSON.', 'warn'); }
+    try {
+      libraryStorageAdapter.saveCanonicalLibrary(state.library);
+      if (window.DocSpriteSlicerV7) window.DocSpriteSlicerV7.libraryStorageStatus = libraryStorageAdapter.status();
+    } catch (err) {
+      toast('Library is too large for browser local storage. Export it as JSON.', 'warn');
+    }
   }
   function mergeAssets(a, b) { const map = new Map(a.map(x => [x.id,x])); for (const asset of b || []) map.set(asset.id, asset); return [...map.values()]; }
 
