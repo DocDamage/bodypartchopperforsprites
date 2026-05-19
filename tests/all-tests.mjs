@@ -8,6 +8,7 @@ const testFiles = [
   'tests/storage-bridge-test.mjs',
   'tests/library-storage-adapter-test.mjs',
   'tests/library-adapter-codemod-test.mjs',
+  'tests/plugin-settings-codemod-test.mjs',
   'tests/importer-module-test.mjs'
 ];
 
