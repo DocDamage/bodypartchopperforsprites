@@ -5,6 +5,7 @@ export function createLibraryStorageAdapter(options = {}) {
   const storage = options.storage || options.target?.localStorage || null;
   const keys = options.keys || STORAGE_KEYS;
   const legacyKeys = options.legacyKeys || [keys.legacyLibraryV6, keys.legacyLibraryV5, keys.legacyLibraryV4].filter(Boolean);
+  let syncInstalled = false;
 
   function readLibrary(key, fallback = null) {
     return readJson(storage, key, fallback);
@@ -38,6 +39,30 @@ export function createLibraryStorageAdapter(options = {}) {
     return merged;
   }
 
+  function installLegacyWriteSync(target = globalThis) {
+    if (!storage || syncInstalled || typeof storage.setItem !== 'function') return false;
+    const originalSetItem = storage.setItem.bind(storage);
+    storage.setItem = (key, value) => {
+      const result = originalSetItem(key, value);
+      if (key === keys.legacyLibraryV6 || key === keys.library) {
+        try {
+          const merged = loadCanonicalLibrary();
+          const serialized = JSON.stringify(merged);
+          if (key !== keys.library) originalSetItem(keys.library, serialized);
+          if (keys.legacyLibraryV6 && key !== keys.legacyLibraryV6) originalSetItem(keys.legacyLibraryV6, serialized);
+          if (target?.DocSpriteSlicerV7) {
+            target.DocSpriteSlicerV7.libraryStorageStatus = status();
+          }
+        } catch {
+          // Keep legacy writes non-blocking.
+        }
+      }
+      return result;
+    };
+    syncInstalled = true;
+    return true;
+  }
+
   function status() {
     const canonical = readLibrary(keys.library, []);
     const legacyV6 = keys.legacyLibraryV6 ? readLibrary(keys.legacyLibraryV6, []) : [];
@@ -47,7 +72,8 @@ export function createLibraryStorageAdapter(options = {}) {
       legacyKey: keys.legacyLibraryV6 || '',
       canonicalAssets: Array.isArray(canonical) ? canonical.length : 0,
       legacyAssets: Array.isArray(legacyV6) ? legacyV6.length : 0,
-      synchronized: JSON.stringify(canonical || []) === JSON.stringify(legacyV6 || [])
+      synchronized: JSON.stringify(canonical || []) === JSON.stringify(legacyV6 || []),
+      legacyWriteSyncInstalled: syncInstalled
     };
   }
 
@@ -58,13 +84,17 @@ export function createLibraryStorageAdapter(options = {}) {
     loadCanonicalLibrary,
     saveCanonicalLibrary,
     syncLibraryStorage,
+    installLegacyWriteSync,
     status
   };
 }
 
 export function installLibraryStorageAdapter(target = globalThis, options = {}) {
   const adapter = createLibraryStorageAdapter({ target, ...options });
-  if (adapter.available) adapter.syncLibraryStorage();
+  if (adapter.available) {
+    adapter.syncLibraryStorage();
+    adapter.installLegacyWriteSync(target);
+  }
   target.DocSpriteSlicerV7LibraryStorageAdapter = adapter;
   if (target.DocSpriteSlicerV7) {
     target.DocSpriteSlicerV7.libraryStorageAdapter = adapter;
