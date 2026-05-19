@@ -13,11 +13,14 @@ const NEW_CONTROL_LIST = `    [els.exportProfileSelect, els.recipeProfileSelect,
       input.addEventListener('input', () => { syncFromInputs(); renderAll(); draw(); });
     });`;
 
-const OLD_PREVIEW_RENDER = `  function renderPreviewRowSelect() { els.previewRowSelect.innerHTML = Array.from({ length: state.grid.rows }, (_, i) => `<option value="${i}">${i}: ${state.grid.rowLabels[i] || `row_${i+1}`}</option>`).join(''); els.previewRowSelect.value = clamp(state.anim.previewRow,0,state.grid.rows-1); }`;
+const RENDER_PREVIEW_ROW_SELECT_RE = /  function renderPreviewRowSelect\(\) \{[\s\S]*?els\.previewRowSelect\.value = clamp\(state\.anim\.previewRow,0,state\.grid\.rows-1\); \}/;
 
 const NEW_PREVIEW_RENDER = `  function renderPreviewRowSelect() {
     const selected = clamp(state.anim.previewRow, 0, state.grid.rows - 1);
-    const currentOptions = Array.from({ length: state.grid.rows }, (_, i) => `<option value="${i}">${i}: ${state.grid.rowLabels[i] || `row_${i+1}`}</option>`).join('');
+    const currentOptions = Array.from({ length: state.grid.rows }, (_, i) => {
+      const label = state.grid.rowLabels[i] || 'row_' + (i + 1);
+      return '<option value="' + i + '">' + i + ': ' + label + '</option>';
+    }).join('');
     if (els.previewRowSelect.innerHTML !== currentOptions) els.previewRowSelect.innerHTML = currentOptions;
     els.previewRowSelect.value = selected;
   }`;
@@ -33,8 +36,8 @@ export function fixPreviewDirectionSelect(source) {
     throw new Error('Could not find preview row select listener block or existing preview row listener.');
   }
 
-  if (output.includes(OLD_PREVIEW_RENDER)) {
-    output = output.replace(OLD_PREVIEW_RENDER, NEW_PREVIEW_RENDER);
+  if (RENDER_PREVIEW_ROW_SELECT_RE.test(output)) {
+    output = output.replace(RENDER_PREVIEW_ROW_SELECT_RE, NEW_PREVIEW_RENDER);
     changed = true;
   } else if (!output.includes('const selected = clamp(state.anim.previewRow')) {
     throw new Error('Could not find renderPreviewRowSelect block or existing fixed render block.');
