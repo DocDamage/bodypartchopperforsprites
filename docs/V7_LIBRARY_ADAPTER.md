@@ -21,6 +21,7 @@ The adapter provides a tested compatibility layer first:
 - writes the merged result to the canonical V7 key
 - mirrors the result back to the legacy v6 key so existing app behavior remains intact
 - attaches to `DocSpriteSlicerV7` through the runtime shell
+- installs a legacy write sync hook so runtime `localStorage.setItem()` writes for the v6 library key are copied to the V7 canonical key
 
 ## Runtime shell exposure
 
@@ -32,6 +33,8 @@ window.DocSpriteSlicerV7.libraryStorageStatus
 ```
 
 On boot, the shell calls the adapter sync path so existing legacy v6 library data is copied into the V7 canonical key while the v6 key remains populated for legacy `app.js` behavior.
+
+The adapter also watches same-page writes to the legacy v6 library key and mirrors those writes into the canonical V7 key. This means existing legacy `app.js` save paths can continue writing the v6 key while V7 storage stays current.
 
 ## Compatibility rule
 
@@ -46,6 +49,8 @@ The adapter test covers:
 - mirroring V7 saves back to the legacy v6 key
 - merging canonical and legacy libraries by id
 - global/runtime-shell attachment behavior
+- legacy v6 library writes syncing to the V7 canonical key
+- V7 canonical library writes syncing back to the legacy v6 key
 - unavailable-storage fallback behavior
 
 The runtime-shell test covers:
@@ -56,6 +61,6 @@ The runtime-shell test covers:
 
 ## Next integration options
 
-1. Replace only `loadLibraryFromStorage()` and `saveLibraryToStorage()` in `app.js` with adapter calls.
-2. Manually verify library import/export, part-save-to-library, and asset-pack import still work.
+1. Manually verify library import/export, part-save-to-library, frame-save-to-library, and asset-pack import still keep both storage keys synchronized.
+2. Replace only `loadLibraryFromStorage()` and `saveLibraryToStorage()` in `app.js` with adapter calls.
 3. After parity is proven, remove legacy library constants from `app.js`.
