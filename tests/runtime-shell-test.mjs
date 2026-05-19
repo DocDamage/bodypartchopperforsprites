@@ -1,5 +1,5 @@
 import { APP_VERSION, PROJECT_FORMAT_VERSION, STORAGE_KEYS } from '../src/core/constants.js';
-import { createRuntimeShell, attachRuntimeShell, patchLegacyBrand, bootRuntimeShell, syncShellLibraryStorage } from '../src/browser/runtime-shell.js';
+import { createRuntimeShell, attachRuntimeShell, patchLegacyBrand, bootRuntimeShell, syncShellLibraryStorage, installHiddenAttributeGuard } from '../src/browser/runtime-shell.js';
 
 function assert(condition, message) {
   if (!condition) {
@@ -15,9 +15,18 @@ function createFakeDocument() {
     '.brand-block strong': { innerHTML: '' },
     '.brand-block em': { textContent: '' }
   };
+  const appended = [];
   return {
     title: '',
     nodes,
+    appended,
+    head: { appendChild: (node) => appended.push(node) },
+    createElement(tag) {
+      return { tagName: tag.toUpperCase(), id: '', textContent: '' };
+    },
+    getElementById(id) {
+      return appended.find((node) => node.id === id) || null;
+    },
     querySelector(selector) {
       return nodes[selector] || null;
     }
@@ -43,6 +52,13 @@ assert(shell.storageBridge.available === false, 'runtime shell creates unavailab
 assert(shell.storageStatus.available === false, 'runtime shell exposes unavailable storage status without browser storage');
 assert(shell.libraryStorageAdapter.available === false, 'runtime shell creates unavailable library adapter without browser storage');
 assert(shell.libraryStorageStatus.available === false, 'runtime shell exposes unavailable library status without browser storage');
+
+const guardDocument = createFakeDocument();
+assert(installHiddenAttributeGuard(guardDocument) === true, 'installHiddenAttributeGuard injects hidden rule');
+assert(guardDocument.appended[0].id === 'v7-hidden-attribute-guard', 'installHiddenAttributeGuard adds stable style id');
+assert(guardDocument.appended[0].textContent.includes('[hidden]'), 'installHiddenAttributeGuard writes hidden selector');
+assert(guardDocument.appended[0].textContent.includes('!important'), 'installHiddenAttributeGuard hidden rule uses important display override');
+assert(installHiddenAttributeGuard(guardDocument) === false, 'installHiddenAttributeGuard is idempotent');
 
 const memoryStorage = createMemoryStorage();
 const storageTarget = { localStorage: memoryStorage };
@@ -79,6 +95,7 @@ assert(bootTarget.DocSpriteSlicerV7.storageBridge.available === true, 'bootRunti
 assert(bootTarget.DocSpriteSlicerV7.libraryStorageAdapter.available === true, 'bootRuntimeShell attaches shell with library adapter');
 assert(bootTarget.DocSpriteSlicerV7.libraryStorageStatus.legacyAssets === 1, 'bootRuntimeShell syncs legacy library into library status');
 assert(JSON.parse(bootTarget.localStorage.getItem(STORAGE_KEYS.library))[0].id === 'boot_asset', 'bootRuntimeShell syncs legacy library into canonical key');
+assert(bootTarget.document.getElementById('v7-hidden-attribute-guard'), 'bootRuntimeShell installs hidden attribute guard');
 assert(bootTarget.document.title === 'Doc Sprite Slicer Studio v7', 'bootRuntimeShell patches document');
 
 if (process.exitCode) process.exit(process.exitCode);
