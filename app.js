@@ -184,7 +184,12 @@ import { createStorageBridge } from './src/browser/storage-bridge.js';
       els.blockFailuresInput, els.allowWarningsInput, els.scaleInput, els.smoothingInput, els.folderByRowInput, els.includeSourceInput, els.includeCreditsInput,
       els.recipeIdInput, els.recipeNameInput
     ];
-    syncInputs.forEach(input => input.addEventListener('input', () => { pushHistory(); syncFromInputs(); renderAll(); draw(); }));
+    syncInputs.forEach(input => input.addEventListener('input', () => {
+      pushHistory();
+      syncFromInputs();
+      renderAll({ preserveEditing: true });
+      draw();
+    }));
     [els.exportProfileSelect, els.recipeProfileSelect, els.partCategoryInput, els.assetCategoryFilter, els.assetSearchInput, els.directionOverrideSelect, els.pluginSearchInput, els.pluginTypeFilter, els.timelineClipName, els.timelineRowSelect, els.timelineFpsInput, els.onionEnabledInput, els.onionPrevInput, els.onionNextInput, els.onionOpacityInput, els.poseNameInput, els.remapLayoutSelect, els.atlasNameInput, els.atlasPaddingInput, els.atlasMaxWidthInput].filter(Boolean).forEach(input => {
       input.addEventListener('input', () => { syncFromInputs(); renderAll(); draw(); });
     });
@@ -276,16 +281,18 @@ import { createStorageBridge } from './src/browser/storage-bridge.js';
     renderDirectionSelect();
   }
 
-  function syncToInputs() {
+  function syncToInputs(options = {}) {
+    const preserveEditing = options.preserveEditing === true;
+    const active = document.activeElement;
     els.colsInput.value = state.grid.cols; els.rowsInput.value = state.grid.rows;
     els.frameWInput.value = state.grid.frameW; els.frameHInput.value = state.grid.frameH;
     els.marginXInput.value = state.grid.marginX; els.marginYInput.value = state.grid.marginY;
     els.spacingXInput.value = state.grid.spacingX; els.spacingYInput.value = state.grid.spacingY;
     els.baseNameInput.value = state.grid.baseName;
-    els.rowLabelsInput.value = state.grid.rowLabels.join(',');
-    els.directionLabelsInput.value = state.grid.directionLabels.join(',');
+    if (!preserveEditing || active !== els.rowLabelsInput) els.rowLabelsInput.value = state.grid.rowLabels.join(',');
+    if (!preserveEditing || active !== els.directionLabelsInput) els.directionLabelsInput.value = state.grid.directionLabels.join(',');
     els.fpsInput.value = state.anim.fps;
-    els.frameCycleInput.value = state.anim.cycle.join(',');
+    if (!preserveEditing || active !== els.frameCycleInput) els.frameCycleInput.value = state.anim.cycle.join(',');
     els.blockFailuresInput.checked = state.qa.blockFailures;
     els.allowWarningsInput.checked = state.qa.allowWarnings;
     els.exportProfileSelect.value = state.export.profileId;
@@ -475,9 +482,9 @@ import { createStorageBridge } from './src/browser/storage-bridge.js';
   }
 
   function recoverAutosave() {
-    const raw = localStorage.getItem(AUTOSAVE_KEY);
-    if (!raw) return toast('No autosave found.', 'warn');
-    restoreProject(JSON.parse(raw));
+    const recovery = v7StorageBridge.readRecoveryState();
+    if (!recovery.autosave) return toast('No autosave found.', 'warn');
+    restoreProject(recovery.autosave);
   }
 
   function autosaveLoop() {
@@ -1176,7 +1183,18 @@ import { createStorageBridge } from './src/browser/storage-bridge.js';
   function copySettings() { navigator.clipboard?.writeText(pretty({ grid:state.grid, export:state.export, qa:state.qa })).then(()=>toast('Settings copied.', 'ok')).catch(()=>downloadText('settings.json', pretty({grid:state.grid, export:state.export, qa:state.qa}))); }
   async function pasteSettings() { const text = prompt('Paste settings JSON:'); if (!text) return; const j = JSON.parse(text); Object.assign(state.grid, j.grid || {}); Object.assign(state.export, j.export || {}); Object.assign(state.qa, j.qa || {}); syncToInputs(); toast('Settings pasted.', 'ok'); }
 
-  function renderAll() { syncToInputs(); renderPreviewRowSelect(); renderTimelineRowSelect(); renderLists(); renderDiagnostics(); renderPalette(); renderProfilePreview(); updateSelectionSummary(); updateQaSummary(); updateSourceLabels(); }
+  function renderAll(options = {}) {
+    syncToInputs(options);
+    renderPreviewRowSelect();
+    renderTimelineRowSelect();
+    renderLists();
+    renderDiagnostics();
+    renderPalette();
+    renderProfilePreview();
+    updateSelectionSummary();
+    updateQaSummary();
+    updateSourceLabels();
+  }
   function updateSourceLabels() { els.sourceName.textContent = state.source.name || 'No source loaded'; els.sourceMeta.textContent = state.source.width ? `${state.source.width}×${state.source.height} px | ${state.grid.cols}×${state.grid.rows} grid | ${state.grid.frameW}×${state.grid.frameH}` : 'Import a PNG/WebP/JPEG spritesheet to begin.'; }
   function renderPreviewRowSelect() { els.previewRowSelect.innerHTML = Array.from({ length: state.grid.rows }, (_, i) => `<option value="${i}">${i}: ${state.grid.rowLabels[i] || `row_${i+1}`}</option>`).join(''); els.previewRowSelect.value = clamp(state.anim.previewRow,0,state.grid.rows-1); }
   function renderLists() { renderParts(); renderPivots(); renderLayers(); renderAssets(); renderRecipeLayers(); renderBatch(); renderBatchLogs(); renderPlugins(); renderTimelineLists(); renderPoseLists(); renderRemapPreview(); renderAtlasPreview(); }
@@ -1303,17 +1321,11 @@ import { createStorageBridge } from './src/browser/storage-bridge.js';
 
   function saveAutosaveSnapshot() {
     const snap = projectSnapshot(false);
-    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(snap));
-    const slots = JSON.parse(localStorage.getItem(AUTOSAVE_SLOTS_KEY) || '[]');
-    slots.unshift({ id: uid('slot'), savedAt: snap.savedAt, name: state.source.name || state.grid.baseName || state.recipe.id, project: snap });
-    localStorage.setItem(AUTOSAVE_SLOTS_KEY, JSON.stringify(slots.slice(0, 5)));
-    const recents = JSON.parse(localStorage.getItem(RECENT_PROJECTS_KEY) || '[]');
-    recents.unshift({ savedAt: snap.savedAt, source: state.source.name, baseName: state.grid.baseName, recipe: state.recipe.id });
-    localStorage.setItem(RECENT_PROJECTS_KEY, JSON.stringify(recents.slice(0, 10)));
+    return v7StorageBridge.saveAutosaveSnapshot(snap, { slotId: uid('slot') });
   }
 
   async function restoreLatestAutosaveSlot() {
-    const slots = JSON.parse(localStorage.getItem(AUTOSAVE_SLOTS_KEY) || '[]');
+    const slots = v7StorageBridge.readRecoveryState().autosaveSlots || [];
     if (!slots.length) return toast('No autosave slots found.', 'warn');
     await restoreProject(slots[0].project);
     toast(`Restored autosave slot from ${new Date(slots[0].savedAt).toLocaleString()}.`, 'ok');
@@ -1321,9 +1333,7 @@ import { createStorageBridge } from './src/browser/storage-bridge.js';
 
   function clearRecoveryData() {
     if (!confirm('Clear autosave, autosave slots, and recent-project recovery data for this browser? Save your project first.')) return;
-    localStorage.removeItem(AUTOSAVE_KEY);
-    localStorage.removeItem(AUTOSAVE_SLOTS_KEY);
-    localStorage.removeItem(RECENT_PROJECTS_KEY);
+    v7StorageBridge.clearRecoveryState();
     toast('Recovery data cleared.', 'ok');
   }
 
@@ -1334,12 +1344,13 @@ import { createStorageBridge } from './src/browser/storage-bridge.js';
   }
 
   function exportRecoveryPackage() {
+    const recovery = v7StorageBridge.readRecoveryState();
     const files = [
       { name:'recovery/current_project.spriteproject.json', data:textBytes(pretty(projectSnapshot(true))) },
-      { name:'recovery/latest_autosave.json', data:textBytes(localStorage.getItem(AUTOSAVE_KEY) || '{}') },
-      { name:'recovery/autosave_slots.json', data:textBytes(localStorage.getItem(AUTOSAVE_SLOTS_KEY) || '[]') },
-      { name:'recovery/recent_projects.json', data:textBytes(localStorage.getItem(RECENT_PROJECTS_KEY) || '[]') },
-      { name:'plugins/plugin_settings.json', data:textBytes(pretty(state.plugins.enabled)) },
+      { name:'recovery/latest_autosave.json', data:textBytes(pretty(recovery.autosave || {})) },
+      { name:'recovery/autosave_slots.json', data:textBytes(pretty(recovery.autosaveSlots || [])) },
+      { name:'recovery/recent_projects.json', data:textBytes(pretty(recovery.recentProjects || [])) },
+      { name:'plugins/plugin_settings.json', data:textBytes(pretty(v7StorageBridge.loadPluginSettings())) },
       { name:'plugins/plugin_manifest.json', data:textBytes(pretty(buildPluginManifest())) }
     ];
     downloadBlob(createZip(files), 'doc_sprite_slicer_studio_v6_recovery_package.zip');
