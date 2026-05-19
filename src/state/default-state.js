@@ -47,6 +47,13 @@ export function createDefaultProjectState() {
     posePreview: { transforms: {} },
     remap: { target: 'godot_folders', plan: [] },
     atlas: { name: 'sprite_atlas', padding: 2, maxWidth: 1024, frames: [], manifest: null },
+    atlasImport: {
+      session: null,
+      view: { showMask: false, showBoxes: true, showIgnored: false, showOrigins: true, showLabels: false },
+      tool: null,
+      selectedObjectIds: [],
+      zoom: 2
+    },
     runtimeBundle: { lastBuilt: null },
     history: [],
     future: []

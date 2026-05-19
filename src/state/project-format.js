@@ -58,6 +58,7 @@ export function createProjectSnapshot(state, options = {}) {
     posePreview: deepClone(state.posePreview || { transforms: {} }),
     remap: deepClone(state.remap),
     atlas: deepClone(state.atlas),
+    atlasImport: deepClone(state.atlasImport || { session: null, view: { showMask: false, showBoxes: true, showIgnored: false, showOrigins: true, showLabels: false }, tool: null, selectedObjectIds: [], zoom: 2 }),
     runtimeBundle: deepClone(state.runtimeBundle || { lastBuilt: null }),
     migrationReport: deepClone(state.migrationReport || []),
     schema: PROJECT_SCHEMA
@@ -100,6 +101,7 @@ export function migrateProject(project = {}) {
   migrated.posePreview = project.posePreview || { transforms: {} };
   migrated.remap = { ...defaults.remap, ...(project.remap || {}) };
   migrated.atlas = { ...defaults.atlas, ...(project.atlas || {}) };
+  migrated.atlasImport = { ...defaults.atlasImport, ...(project.atlasImport || {}) };
   migrated.runtimeBundle = project.runtimeBundle || { lastBuilt: null };
   migrated.migrationReport = [...(project.migrationReport || []), ...report];
   migrated.schema = PROJECT_SCHEMA;

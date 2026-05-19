@@ -7,6 +7,19 @@ import {
 import { createLibraryStorageAdapter } from './src/browser/library-storage-adapter.js';
 import { createStorageBridge } from './src/browser/storage-bridge.js';
 import { createProjectSnapshot as createV7ProjectSnapshot, migrateProject as migrateV7Project } from './src/state/project-format.js';
+import { loadSourceImage } from './src/importers/atlas/loader.js';
+import { runAtlasPipeline, reanalyzeRegion } from './src/importers/atlas/pipeline.js';
+import { getPreset, presetIds } from './src/importers/atlas/presets.js';
+import { ATLAS_SESSION_VERSION, createAtlasSession, createEntity, createAnimation, createAtlasObject } from './src/importers/atlas/session.js';
+import { exportTrimmedFrames, exportUnassignedFrames } from './src/exporters/atlas/trimmed.js';
+import { exportNormalizedFrames } from './src/exporters/atlas/normalized.js';
+import { buildExportMetadata, buildAtlasJson } from './src/exporters/atlas/metadata.js';
+import { buildGodotSpriteFrames } from './src/exporters/atlas/engines/godot.js';
+import { buildUnitySpriteMeta } from './src/exporters/atlas/engines/unity.js';
+import { buildAsepriteJson } from './src/exporters/atlas/engines/aseprite.js';
+import { buildTexturePackerJson } from './src/exporters/atlas/engines/texture-packer.js';
+import { buildKeterAtlasJson } from './src/exporters/atlas/engines/keter.js';
+import { buildRpgMakerSheet } from './src/exporters/atlas/engines/rpg-maker.js';
 
 (() => {
   'use strict';
@@ -97,6 +110,15 @@ import { createProjectSnapshot as createV7ProjectSnapshot, migrateProject as mig
     posePreview: { transforms: {} },
     remap: { target: 'godot_folders', plan: [] },
     atlas: { name: 'sprite_atlas', padding: 2, maxWidth: 1024, frames: [], manifest: null },
+    atlasImport: {
+      session: null,
+      sourceData: null,
+      view: { showMask: false, showBoxes: true, showIgnored: false, showOrigins: true, showLabels: false },
+      tool: null,
+      selectedObjectIds: [],
+      zoom: 2,
+      drag: null
+    },
     runtimeBundle: { lastBuilt: null },
     history: [],
     future: []
@@ -135,7 +157,8 @@ import { createProjectSnapshot as createV7ProjectSnapshot, migrateProject as mig
       'colsInput','rowsInput','frameWInput','frameHInput','marginXInput','marginYInput','spacingXInput','spacingYInput','baseNameInput','rowLabelsInput','directionLabelsInput',
       'previewRowSelect','fpsInput','frameCycleInput','previewCanvas','partCategoryInput','underlapPaddingInput','partList','pivotList','directionOverrideSelect','layerList',
       'fromColorInput','toColorInput','paletteSwatches','blockFailuresInput','allowWarningsInput','diagnosticsList','exportProfileSelect','scaleInput','smoothingInput','folderByRowInput','includeSourceInput','includeCreditsInput','profilePreview',
-      'assetSearchInput','assetCategoryFilter','assetLibraryList','recipeIdInput','recipeNameInput','recipeProfileSelect','recipeCanvas','recipeLayerList','batchList','batchLogList','pluginSearchInput','pluginTypeFilter','pluginList','timelineClipName','timelineRowSelect','timelineFpsInput','onionEnabledInput','onionPrevInput','onionNextInput','onionOpacityInput','timelineFrameList','timelineClipList','poseNameInput','posePartList','poseList','remapLayoutSelect','remapPreviewList','atlasNameInput','atlasPaddingInput','atlasMaxWidthInput','atlasPreviewList'
+      'assetSearchInput','assetCategoryFilter','assetLibraryList','recipeIdInput','recipeNameInput','recipeProfileSelect','recipeCanvas','recipeLayerList','batchList','batchLogList','pluginSearchInput','pluginTypeFilter','pluginList','timelineClipName','timelineRowSelect','timelineFpsInput','onionEnabledInput','onionPrevInput','onionNextInput','onionOpacityInput','timelineFrameList','timelineClipList','poseNameInput','posePartList','poseList','remapLayoutSelect','remapPreviewList','atlasNameInput','atlasPaddingInput','atlasMaxWidthInput','atlasPreviewList',
+      'atlasImportInput','atlasPresetSelect','atlasBgMode','atlasToleranceInput','atlasImportPaddingInput','atlasEdgeFloodInput','atlasAnalysisSummary','atlasObjectList','atlasEntityList','atlasPreviewCanvas','atlasFrameOrderList','atlasEngineSelect'
     ]) els[id] = document.getElementById(id);
     els.ctx = els.mainCanvas.getContext('2d', { willReadFrequently: true });
     els.previewCtx = els.previewCanvas.getContext('2d');
@@ -186,7 +209,7 @@ import { createProjectSnapshot as createV7ProjectSnapshot, migrateProject as mig
       renderAll({ preserveEditing: true });
       draw();
     }));
-    [els.exportProfileSelect, els.recipeProfileSelect, els.partCategoryInput, els.assetCategoryFilter, els.assetSearchInput, els.directionOverrideSelect, els.pluginSearchInput, els.pluginTypeFilter, els.timelineClipName, els.timelineRowSelect, els.timelineFpsInput, els.onionEnabledInput, els.onionPrevInput, els.onionNextInput, els.onionOpacityInput, els.poseNameInput, els.remapLayoutSelect, els.atlasNameInput, els.atlasPaddingInput, els.atlasMaxWidthInput].filter(Boolean).forEach(input => {
+    [els.exportProfileSelect, els.recipeProfileSelect, els.previewRowSelect, els.partCategoryInput, els.assetCategoryFilter, els.assetSearchInput, els.directionOverrideSelect, els.pluginSearchInput, els.pluginTypeFilter, els.timelineClipName, els.timelineRowSelect, els.timelineFpsInput, els.onionEnabledInput, els.onionPrevInput, els.onionNextInput, els.onionOpacityInput, els.poseNameInput, els.remapLayoutSelect, els.atlasNameInput, els.atlasPaddingInput, els.atlasMaxWidthInput].filter(Boolean).forEach(input => {
       input.addEventListener('input', () => { syncFromInputs(); renderAll(); draw(); });
     });
 
@@ -196,6 +219,7 @@ import { createProjectSnapshot as createV7ProjectSnapshot, migrateProject as mig
     els.batchInput.addEventListener('change', e => importBatchImages(e.target.files));
     els.libraryImportInput.addEventListener('change', e => importLibraryFile(e.target.files[0]));
     els.assetPackInput.addEventListener('change', e => importAssetPack(e.target.files));
+    els.atlasImportInput.addEventListener('change', e => importAtlasImage(e.target.files[0]));
 
     els.mainCanvas.addEventListener('mousedown', onCanvasDown);
     els.mainCanvas.addEventListener('mousemove', onCanvasMove);
@@ -205,7 +229,17 @@ import { createProjectSnapshot as createV7ProjectSnapshot, migrateProject as mig
 
     els.dropZone.addEventListener('dragover', e => { e.preventDefault(); els.dropZone.classList.add('drag'); });
     els.dropZone.addEventListener('dragleave', () => els.dropZone.classList.remove('drag'));
-    els.dropZone.addEventListener('drop', e => { e.preventDefault(); els.dropZone.classList.remove('drag'); loadImageFile(e.dataTransfer.files[0]); });
+    els.dropZone.addEventListener('drop', e => {
+      e.preventDefault(); els.dropZone.classList.remove('drag');
+      const file = e.dataTransfer.files[0];
+      if (!file) return;
+      const ext = file.name.split('.').pop().toLowerCase();
+      if (state.ui.mode === 'atlas-import' || ext === 'gif') {
+        importAtlasImage(file);
+      } else {
+        loadImageFile(file);
+      }
+    });
 
     document.addEventListener('keydown', async e => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); showCommandPalette(); }
@@ -214,6 +248,18 @@ import { createProjectSnapshot as createV7ProjectSnapshot, migrateProject as mig
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); await redo(); }
       if (e.key === 'Escape') { hideCommandPalette(); hideContextMenu(); cancelTools(); }
       if (e.key === 'Delete' || e.key === 'Backspace') { if (!['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) runAction('deleteSelection'); }
+      // Atlas import shortcuts
+      if (state.ui.mode === 'atlas-import' && !['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) {
+        if (e.key.toLowerCase() === 'm') { e.preventDefault(); atlasMergeSelected(); }
+        if (e.key.toLowerCase() === 'i') { e.preventDefault(); atlasIgnoreSelected(); }
+        if (e.key.toLowerCase() === 'u') { e.preventDefault(); atlasUnignoreSelected(); }
+        if (e.key.toLowerCase() === 'c') { e.preventDefault(); atlasClassifySelected(); }
+        if (e.key.toLowerCase() === 'a') { e.preventDefault(); atlasAssignAnimation(); }
+        if (e.key.toLowerCase() === 'e') { e.preventDefault(); atlasAssignEntity(); }
+        if (e.key.toLowerCase() === 'o') { e.preventDefault(); atlasSetOrigin(); }
+        if (e.key.toLowerCase() === 'b') { e.preventDefault(); atlasSetBaseline(); }
+        if (e.key === ' ') { e.preventDefault(); if (atlasPreviewTimer) pauseAtlasPreview(); else playAtlasPreview(); }
+      }
     });
     els.commandSearch.addEventListener('input', () => renderCommands(els.commandSearch.value));
     els.commandSearch.addEventListener('keydown', e => {
@@ -231,6 +277,13 @@ import { createProjectSnapshot as createV7ProjectSnapshot, migrateProject as mig
   }
 
   function setMode(mode) {
+    // Clean up atlas mode before switching away
+    if (state.ui.mode === 'atlas-import' && mode !== 'atlas-import') {
+      pauseAtlasPreview();
+      state.atlasImport.tool = null;
+      state.atlasImport.drag = null;
+      els.mainCanvas.style.cursor = 'default';
+    }
     state.ui.mode = mode;
     $$('.mode-button').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
     $$('.panel').forEach(p => p.classList.toggle('active', p.dataset.panel === mode));
@@ -240,7 +293,7 @@ import { createProjectSnapshot as createV7ProjectSnapshot, migrateProject as mig
   }
 
   function modeTitle(mode) {
-    return ({ slice:'Slice', animate:'Animate', rig:'Rig Prep', layers:'Layer Stack', palette:'Palette', qa:'QA Gates', export:'Export', library:'Asset Library', recipe:'Recipe Builder', batch:'Batch Queue', plugins:'Plugin Manager', timeline:'Timeline Lab', pose:'Pose Lab', remap:'Sheet Remapper', atlas:'Atlas Lab' })[mode] || mode;
+    return ({ slice:'Slice', animate:'Animate', rig:'Rig Prep', layers:'Layer Stack', palette:'Palette', qa:'QA Gates', export:'Export', library:'Asset Library', recipe:'Recipe Builder', batch:'Batch Queue', plugins:'Plugin Manager', timeline:'Timeline Lab', pose:'Pose Lab', remap:'Sheet Remapper', atlas:'Atlas Lab', 'atlas-import':'Atlas Import' })[mode] || mode;
   }
 
   function syncFromInputs() {
@@ -274,6 +327,9 @@ import { createProjectSnapshot as createV7ProjectSnapshot, migrateProject as mig
     if (els.atlasNameInput) state.atlas.name = safeName(els.atlasNameInput.value || 'sprite_atlas');
     if (els.atlasPaddingInput) state.atlas.padding = intVal(els.atlasPaddingInput, 0);
     if (els.atlasMaxWidthInput) state.atlas.maxWidth = intVal(els.atlasMaxWidthInput, 64);
+    if (els.atlasPresetSelect) state.atlasImport.preset = els.atlasPresetSelect.value || 'manual_hybrid';
+    if (els.atlasToleranceInput) state.atlasImport.tolerance = intVal(els.atlasToleranceInput, 0);
+    if (els.atlasEdgeFloodInput) state.atlasImport.edgeFlood = els.atlasEdgeFloodInput.checked;
     renderDirectionSelect();
   }
 
@@ -309,6 +365,9 @@ import { createProjectSnapshot as createV7ProjectSnapshot, migrateProject as mig
     if (els.atlasNameInput) els.atlasNameInput.value = state.atlas.name || 'sprite_atlas';
     if (els.atlasPaddingInput) els.atlasPaddingInput.value = state.atlas.padding ?? 2;
     if (els.atlasMaxWidthInput) els.atlasMaxWidthInput.value = state.atlas.maxWidth ?? 1024;
+    if (els.atlasPresetSelect) els.atlasPresetSelect.value = state.atlasImport.preset || 'manual_hybrid';
+    if (els.atlasToleranceInput) els.atlasToleranceInput.value = state.atlasImport.tolerance ?? 16;
+    if (els.atlasEdgeFloodInput) els.atlasEdgeFloodInput.checked = state.atlasImport.edgeFlood !== false;
     renderPreviewRowSelect();
     renderDirectionSelect();
   }
@@ -363,7 +422,15 @@ import { createProjectSnapshot as createV7ProjectSnapshot, migrateProject as mig
       sliceThisFrame: exportSelectedFrame, setFrameReference: () => toast('Frame set as reference for rig/recipe previews.', 'ok'), saveFrameAsAsset,
       selectAllParts: () => toast('Selection is single-object in v6. Use duplicate/mirror tools on selected parts.', 'warn'),
       showPluginManager, toggleSelectedPlugin, enableAllPlugins, disableAllPlugins, exportPluginManifest, exportPluginReport,
-      showTimelineLab, buildTimelineClipFromRow, duplicateTimelineClip, deleteTimelineClip, applyTimelineToAnimation, exportTimelineJson, exportTimelineZip, toggleOnionSkin, showPoseLab, savePose, deletePose, testRotateSelectedPartLeft, testRotateSelectedPartRight, resetPartTransform, exportPoseLibrary, showRemapLab, generateRemapPreview, exportRemapPlan, showAtlasLab, packAtlas, exportAtlasManifest, exportRuntimeBundle, exportRuntimeZip, openAssetPack: () => els.assetPackInput.click(), importAssetPack, validateProject, runVisualDiff, exportVisualDiffReport, exportPreview, backupProject, exportRecoveryPackage, clearRecoveryData, restoreLatestAutosaveSlot, exportFailedBatchOnly
+      showTimelineLab, buildTimelineClipFromRow, duplicateTimelineClip, deleteTimelineClip, applyTimelineToAnimation, exportTimelineJson, exportTimelineZip, toggleOnionSkin, showPoseLab, savePose, deletePose, testRotateSelectedPartLeft, testRotateSelectedPartRight, resetPartTransform, exportPoseLibrary, showRemapLab, generateRemapPreview, exportRemapPlan, showAtlasLab, packAtlas, exportAtlasManifest, exportRuntimeBundle, exportRuntimeZip, openAssetPack: () => els.assetPackInput.click(), importAssetPack, validateProject, runVisualDiff, exportVisualDiffReport, exportPreview, backupProject, exportRecoveryPackage, clearRecoveryData, restoreLatestAutosaveSlot, exportFailedBatchOnly,
+      showAtlasImport: () => setMode('atlas-import'),
+      openAtlasImport: () => els.atlasImportInput.click(), importAtlasImage, runAtlasAnalysis, toggleAtlasMask, toggleAtlasBoxes, toggleAtlasIgnored, toggleAtlasOrigins,
+      exportAtlasTrimmed, exportAtlasNormalized, exportAtlasMetadata,
+      atlasSelectObject, atlasIgnoreSelected, atlasUnignoreSelected, atlasClassifySelected, atlasMergeSelected, atlasSetOrigin, atlasSetBaseline,
+      atlasCreateEntity, atlasAssignEntity, atlasCreateAnimation, atlasAssignAnimation, atlasDeleteFromSession,
+      atlasRedetectRegion: () => { state.atlasImport.tool = 'redetectRegion'; toast('Drag a region on the canvas to re-detect objects inside it.', 'ok'); },
+      playAtlasPreview, pauseAtlasPreview,
+      exportAtlasEngine
     };
     if (!actions[action]) return toast(`Unknown action: ${action}`, 'warn');
     try {
@@ -443,6 +510,7 @@ import { createProjectSnapshot as createV7ProjectSnapshot, migrateProject as mig
     state.posePreview = project.posePreview || { transforms: {} };
     state.remap = project.remap || { target: 'godot_folders', plan: [] };
     state.atlas = project.atlas || { name: 'sprite_atlas', padding: 2, maxWidth: 1024, frames: [], manifest: null };
+    state.atlasImport = project.atlasImport || { session: null, sourceData: null, view: { showMask: false, showBoxes: true, showIgnored: false, showOrigins: true, showLabels: false }, tool: null, selectedObjectIds: [], zoom: 2, drag: null };
     state.runtimeBundle = project.runtimeBundle || { lastBuilt: null };
     state.migrationReport = project.migrationReport || state.migrationReport || [];
     savePluginSettings();
@@ -453,8 +521,29 @@ import { createProjectSnapshot as createV7ProjectSnapshot, migrateProject as mig
     if (imageData) {
       const img = await loadImage(imageData);
       state.source = { name: project.source?.name || 'restored_source.png', dataUrl: imageData, width: img.naturalWidth, height: img.naturalHeight, image: img };
+      // Rebuild atlas sourceData from restored image
+      if (state.atlasImport.session) {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(img, 0, 0);
+        const imageDataObj = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        state.atlasImport.sourceData = {
+          file_name: project.source?.name || 'restored_source.png',
+          width: img.naturalWidth,
+          height: img.naturalHeight,
+          format: 'png',
+          mode: 'rgba',
+          dataUrl: imageData,
+          image: img,
+          canvas,
+          ctx,
+          imageData: imageDataObj
+        };
+      }
     } else {
       state.source = { name: '', dataUrl: '', width: 0, height: 0, image: null };
+      state.atlasImport.sourceData = null;
     }
     syncToInputs();
     if (!opts.quiet) toast(`Project restored. Format v${project.version || 'unknown'}.`, 'ok');
@@ -572,6 +661,7 @@ import { createProjectSnapshot as createV7ProjectSnapshot, migrateProject as mig
     drawParts(ctx, z);
     if (state.view.showPivots) drawPivots(ctx, z);
     drawToolPreview(ctx, z);
+    if (state.ui.mode === 'atlas-import') drawAtlasImportOverlays(ctx, z);
     updateSourceLabels();
     drawPreviewFrame();
   }
@@ -684,6 +774,65 @@ import { createProjectSnapshot as createV7ProjectSnapshot, migrateProject as mig
   function onCanvasDown(e) {
     if (!state.source.image) return;
     const pt = sourcePointFromEvent(e);
+    if (state.ui.mode === 'atlas-import') {
+      if (state.atlasImport.tool === 'setOrigin') {
+        const session = state.atlasImport.session;
+        if (session) {
+          for (const id of state.atlasImport.selectedObjectIds) {
+            const obj = session.objects.find(o => o.id === id);
+            if (obj) {
+              const [x, y] = obj.source_bbox;
+              obj.origin = [pt.x - x, pt.y - y];
+            }
+          }
+        }
+        state.atlasImport.tool = null;
+        draw(); toast('Origin set.', 'ok');
+        return;
+      }
+      if (state.atlasImport.tool === 'redetectRegion') {
+        state.atlasImport.drag = { type: 'redetectRegion', start: pt, current: pt };
+        draw();
+        return;
+      }
+      const session = state.atlasImport.session;
+      if (session) {
+        // Check resize/move handles on selected objects first
+        for (const id of state.atlasImport.selectedObjectIds) {
+          const obj = session.objects.find(o => o.id === id);
+          if (!obj || obj.ignored) continue;
+          const handle = atlasHitTestHandle(obj.source_bbox, pt);
+          if (handle) {
+            state.atlasImport.drag = { type: 'resizeBox', objectId: id, handle, start: pt, originalBBox: [...obj.source_bbox] };
+            return;
+          }
+        }
+        // Check if inside a selected object for move
+        for (const id of state.atlasImport.selectedObjectIds) {
+          const obj = session.objects.find(o => o.id === id);
+          if (!obj || obj.ignored) continue;
+          const [x, y, w, h] = obj.source_bbox;
+          if (pt.x >= x && pt.x <= x + w && pt.y >= y && pt.y <= y + h) {
+            state.atlasImport.drag = { type: 'moveBox', objectId: id, start: pt, originalBBox: [...obj.source_bbox] };
+            return;
+          }
+        }
+        // Select object under cursor
+        let hit = null;
+        for (let i = session.objects.length - 1; i >= 0; i--) {
+          const obj = session.objects[i];
+          if (obj.ignored && !state.atlasImport.view.showIgnored) continue;
+          const [x, y, w, h] = obj.source_bbox;
+          if (pt.x >= x && pt.x <= x + w && pt.y >= y && pt.y <= y + h) {
+            hit = obj.id;
+            break;
+          }
+        }
+        if (hit) atlasSelectObject(hit, e.ctrlKey || e.metaKey);
+        else { state.atlasImport.selectedObjectIds = []; renderAtlasImportUI(); draw(); }
+      }
+      return;
+    }
     const fc = frameFromPoint(pt);
     state.ui.selectedFrame = fc;
     if (state.ui.tool === 'rect') {
@@ -702,6 +851,62 @@ import { createProjectSnapshot as createV7ProjectSnapshot, migrateProject as mig
 
   function onCanvasMove(e) {
     if (state.ui.drag?.type === 'rect') { state.ui.drag.current = sourcePointFromEvent(e); draw(); }
+    if (state.ui.mode === 'atlas-import') {
+      const pt = sourcePointFromEvent(e);
+      const session = state.atlasImport.session;
+      const drag = state.atlasImport.drag;
+      if (drag?.type === 'resizeBox') {
+        const obj = session.objects.find(o => o.id === drag.objectId);
+        if (obj) {
+          const [ox, oy, ow, oh] = drag.originalBBox;
+          const dx = pt.x - drag.start.x;
+          const dy = pt.y - drag.start.y;
+          let nx = ox, ny = oy, nw = ow, nh = oh;
+          if (drag.handle.includes('w')) { nx = ox + dx; nw = ow - dx; }
+          if (drag.handle.includes('e')) { nw = ow + dx; }
+          if (drag.handle.includes('n')) { ny = oy + dy; nh = oh - dy; }
+          if (drag.handle.includes('s')) { nh = oh + dy; }
+          if (nw < 2) nw = 2; if (nh < 2) nh = 2;
+          obj.source_bbox = [nx, ny, nw, nh];
+          obj.trimmed_bbox = [nx, ny, nw, nh];
+          draw();
+        }
+      } else if (drag?.type === 'moveBox') {
+        const obj = session.objects.find(o => o.id === drag.objectId);
+        if (obj) {
+          const [ox, oy, ow, oh] = drag.originalBBox;
+          const dx = pt.x - drag.start.x;
+          const dy = pt.y - drag.start.y;
+          obj.source_bbox = [ox + dx, oy + dy, ow, oh];
+          obj.trimmed_bbox = [ox + dx, oy + dy, ow, oh];
+          draw();
+        }
+      } else if (drag?.type === 'redetectRegion') {
+        state.atlasImport.drag.current = pt;
+        draw();
+      } else {
+        // Update cursor based on hover
+        let cursor = 'default';
+        if (session) {
+          for (const id of state.atlasImport.selectedObjectIds) {
+            const obj = session.objects.find(o => o.id === id);
+            if (!obj || obj.ignored) continue;
+            const handle = atlasHitTestHandle(obj.source_bbox, pt);
+            if (handle) {
+              const cursors = { nw: 'nw-resize', ne: 'ne-resize', sw: 'sw-resize', se: 'se-resize', n: 'n-resize', s: 's-resize', w: 'w-resize', e: 'e-resize' };
+              cursor = cursors[handle] || 'move';
+              break;
+            }
+            const [x, y, w, h] = obj.source_bbox;
+            if (pt.x >= x && pt.x <= x + w && pt.y >= y && pt.y <= y + h) {
+              cursor = 'move';
+              break;
+            }
+          }
+        }
+        els.mainCanvas.style.cursor = cursor;
+      }
+    }
   }
 
   function onCanvasUp() {
@@ -715,6 +920,22 @@ import { createProjectSnapshot as createV7ProjectSnapshot, migrateProject as mig
         state.parts.push(part); selectObject('part', part.id); toast('Rect part created.', 'ok');
       }
       draw(); renderAll();
+    }
+    if (state.ui.mode === 'atlas-import') {
+      const drag = state.atlasImport.drag;
+      if (drag?.type === 'resizeBox' || drag?.type === 'moveBox') {
+        state.atlasImport.drag = null;
+        renderAtlasImportUI();
+        draw();
+        toast('Box updated.', 'ok');
+      } else if (drag?.type === 'redetectRegion') {
+        const r = rectFromPoints(drag.start, drag.current);
+        state.atlasImport.drag = null;
+        if (r.w > 8 && r.h > 8) {
+          runAtlasRedetectInRegion(r);
+        }
+        draw();
+      }
     }
   }
 
@@ -765,7 +986,12 @@ import { createProjectSnapshot as createV7ProjectSnapshot, migrateProject as mig
   }
 
   function setTool(tool) { state.ui.tool = tool; state.ui.polygon = []; toast(`${tool} tool active. Use the canvas; press Esc to cancel.`, 'ok'); }
-  function cancelTools() { state.ui.tool = null; state.ui.drag = null; state.ui.polygon = []; draw(); }
+  function cancelTools() {
+    state.ui.tool = null; state.ui.drag = null; state.ui.polygon = [];
+    if (state.atlasImport.tool) { state.atlasImport.tool = null; els.mainCanvas.style.cursor = 'default'; }
+    if (state.atlasImport.drag) { state.atlasImport.drag = null; }
+    draw();
+  }
 
   function addHumanoidTemplate() {
     if (!state.source.image) return toast('Load a sheet first.', 'warn');
@@ -1157,6 +1383,11 @@ import { createProjectSnapshot as createV7ProjectSnapshot, migrateProject as mig
   function parseHex(s) { const m = /^#?([0-9a-f]{6})$/i.exec(String(s).trim()); if (!m) return null; const v=m[1]; return [parseInt(v.slice(0,2),16), parseInt(v.slice(2,4),16), parseInt(v.slice(4,6),16)]; }
 
   function deleteSelection() {
+    if (state.ui.mode === 'atlas-import') {
+      if (!state.atlasImport.selectedObjectIds.length) return toast('Nothing selected.', 'warn');
+      atlasDeleteFromSession();
+      return;
+    }
     const {type,id} = state.ui.selected; if (!type || !id) return toast('Nothing selected.', 'warn'); pushHistory();
     if (type === 'part') state.parts = state.parts.filter(x=>x.id!==id);
     if (type === 'pivot') state.pivots = state.pivots.filter(x=>x.id!==id);
@@ -1183,9 +1414,18 @@ import { createProjectSnapshot as createV7ProjectSnapshot, migrateProject as mig
     updateSelectionSummary();
     updateQaSummary();
     updateSourceLabels();
+    renderAtlasImportUI();
   }
-  function updateSourceLabels() { els.sourceName.textContent = state.source.name || 'No source loaded'; els.sourceMeta.textContent = state.source.width ? `${state.source.width}×${state.source.height} px | ${state.grid.cols}×${state.grid.rows} grid | ${state.grid.frameW}×${state.grid.frameH}` : 'Import a PNG/WebP/JPEG spritesheet to begin.'; }
-  function renderPreviewRowSelect() { els.previewRowSelect.innerHTML = Array.from({ length: state.grid.rows }, (_, i) => `<option value="${i}">${i}: ${state.grid.rowLabels[i] || `row_${i+1}`}</option>`).join(''); els.previewRowSelect.value = clamp(state.anim.previewRow,0,state.grid.rows-1); }
+  function updateSourceLabels() { els.sourceName.textContent = state.source.name || 'No source loaded'; els.sourceMeta.textContent = state.source.width ? `${state.source.width}×${state.source.height} px | ${state.ui.mode === 'atlas-import' ? 'Atlas Import mode' : `${state.grid.cols}×${state.grid.rows} grid | ${state.grid.frameW}×${state.grid.frameH}`}` : 'Import a PNG/WebP/JPEG spritesheet to begin.'; }
+  function renderPreviewRowSelect() {
+    const selected = clamp(state.anim.previewRow, 0, state.grid.rows - 1);
+    const currentOptions = Array.from({ length: state.grid.rows }, (_, i) => {
+      const label = state.grid.rowLabels[i] || 'row_' + (i + 1);
+      return '<option value="' + i + '">' + i + ': ' + label + '</option>';
+    }).join('');
+    if (els.previewRowSelect.innerHTML !== currentOptions) els.previewRowSelect.innerHTML = currentOptions;
+    els.previewRowSelect.value = selected;
+  }
   function renderLists() { renderParts(); renderPivots(); renderLayers(); renderAssets(); renderRecipeLayers(); renderBatch(); renderBatchLogs(); renderPlugins(); renderTimelineLists(); renderPoseLists(); renderRemapPreview(); renderAtlasPreview(); }
   function rowActive(type,id) { return state.ui.selected.type === type && state.ui.selected.id === id ? ' active' : ''; }
   function renderParts() { els.partList.innerHTML = state.parts.map(p => `<div class="object-row${rowActive('part',p.id)}" data-type="part" data-id="${p.id}"><div class="object-main"><strong>${escapeHtml(p.name)}</strong><span>${p.category} | ${p.type} | frame ${p.row}:${p.col}</span></div><span class="badge">z${p.zOrder}</span></div>`).join('') || '<span class="muted">No rig parts yet.</span>'; wireObjectRows(els.partList); }
@@ -1239,7 +1479,25 @@ import { createProjectSnapshot as createV7ProjectSnapshot, migrateProject as mig
   function hideContextMenu() { els.contextMenu.hidden = true; }
 
   const COMMANDS = [
-    ['Import Spritesheet','openImage','File'],['Open Project','openProject','File'],['Save Project','saveProject','File'],['Recover Autosave','recoverAutosave','File'],['Export Workspace ZIP','exportWorkspaceZip','Export'],['Export Frames ZIP','exportFramesZip','Export'],['Detect Grid','detectGrid','Sheet'],['Apply LPC Preset','applyLpcPreset','Sheet'],['Assign LPC Row Labels','assignLpcRows','Sheet'],['Run Diagnostics','runDiagnostics','QA'],['Export QA Report','exportReport','QA'],['Add Rect Part','addRectPart','Rig'],['Add Polygon Part','addPolygonPart','Rig'],['Add Pivot','addPivot','Rig'],['Save Selected Part as Asset','saveSelectedPartAsAsset','Library'],['Import Asset Images','openAssetImages','Library'],['New Recipe','newRecipe','Recipe'],['Compose Recipe','composeRecipe','Recipe'],['Import Batch Sheets','openBatchImages','Batch'],['Run Batch','runBatch','Batch'],['Godot 4 Profile','setExportGodot','Export'],['KeterEngine Profile','setExportKeter','Export'],['Timeline Lab','showTimelineLab','Animation Lab'],['Add Row Clip','buildTimelineClipFromRow','Animation Lab'],['Toggle Onion Skin','toggleOnionSkin','Animation Lab'],['Export Timeline JSON','exportTimelineJson','Animation Lab'],['Pose Lab','showPoseLab','Rig'],['Save Pose Snapshot','savePose','Rig'],['Sheet Remapper','showRemapLab','Sheet'],['Generate Remap Plan','generateRemapPreview','Sheet'],['Atlas Lab','showAtlasLab','Export'],['Pack Atlas Preview','packAtlas','Export'],['Export Runtime Bundle','exportRuntimeBundle','Export'],['Plugin Manager','showPluginManager','Tools'],['Asset Pack Importer','openAssetPack','Tools'],['Validate Project','validateProject','Tools'],['Run Visual QA Diff','runVisualDiff','QA'],['Export Preview','exportPreview','Export'],['Backup Project','backupProject','File']
+    ['Import Spritesheet','openImage','File'],['Import Atlas','openAtlasImport','File'],['Open Project','openProject','File'],['Save Project','saveProject','File'],['Recover Autosave','recoverAutosave','File'],['Export Workspace ZIP','exportWorkspaceZip','Export'],['Export Frames ZIP','exportFramesZip','Export'],
+    ['Detect Grid','detectGrid','Sheet'],['Apply LPC Preset','applyLpcPreset','Sheet'],['Assign LPC Row Labels','assignLpcRows','Sheet'],
+    ['Run Diagnostics','runDiagnostics','QA'],['Export QA Report','exportReport','QA'],
+    ['Add Rect Part','addRectPart','Rig'],['Add Polygon Part','addPolygonPart','Rig'],['Add Pivot','addPivot','Rig'],['Save Selected Part as Asset','saveSelectedPartAsAsset','Library'],['Import Asset Images','openAssetImages','Library'],
+    ['New Recipe','newRecipe','Recipe'],['Compose Recipe','composeRecipe','Recipe'],
+    ['Import Batch Sheets','openBatchImages','Batch'],['Run Batch','runBatch','Batch'],
+    ['Godot 4 Profile','setExportGodot','Export'],['KeterEngine Profile','setExportKeter','Export'],
+    ['Timeline Lab','showTimelineLab','Animation Lab'],['Add Row Clip','buildTimelineClipFromRow','Animation Lab'],['Toggle Onion Skin','toggleOnionSkin','Animation Lab'],['Export Timeline JSON','exportTimelineJson','Animation Lab'],
+    ['Pose Lab','showPoseLab','Rig'],['Save Pose Snapshot','savePose','Rig'],
+    ['Sheet Remapper','showRemapLab','Sheet'],['Generate Remap Plan','generateRemapPreview','Sheet'],
+    ['Atlas Lab','showAtlasLab','Export'],['Pack Atlas Preview','packAtlas','Export'],['Export Runtime Bundle','exportRuntimeBundle','Export'],
+    ['Atlas Import Mode','showAtlasImport','Atlas'],['Run Atlas Analysis','runAtlasAnalysis','Atlas'],
+    ['Toggle Atlas Mask','toggleAtlasMask','Atlas'],['Toggle Atlas Boxes','toggleAtlasBoxes','Atlas'],['Toggle Atlas Ignored','toggleAtlasIgnored','Atlas'],['Toggle Atlas Origins','toggleAtlasOrigins','Atlas'],
+    ['Atlas Set Origin','atlasSetOrigin','Atlas'],['Atlas Set Baseline','atlasSetBaseline','Atlas'],['Atlas Merge Selected','atlasMergeSelected','Atlas'],['Atlas Ignore Selected','atlasIgnoreSelected','Atlas'],['Atlas Unignore Selected','atlasUnignoreSelected','Atlas'],['Atlas Classify Selected','atlasClassifySelected','Atlas'],['Atlas Re-detect Region','atlasRedetectRegion','Atlas'],
+    ['Atlas Create Entity','atlasCreateEntity','Atlas'],['Atlas Assign Entity','atlasAssignEntity','Atlas'],['Atlas Create Animation','atlasCreateAnimation','Atlas'],['Atlas Assign Animation','atlasAssignAnimation','Atlas'],
+    ['Atlas Play Preview','playAtlasPreview','Atlas'],['Atlas Pause Preview','pauseAtlasPreview','Atlas'],
+    ['Export Atlas Trimmed','exportAtlasTrimmed','Atlas'],['Export Atlas Normalized','exportAtlasNormalized','Atlas'],['Export Atlas Metadata','exportAtlasMetadata','Atlas'],['Export Atlas Engine','exportAtlasEngine','Atlas'],
+    ['Plugin Manager','showPluginManager','Tools'],['Asset Pack Importer','openAssetPack','Tools'],['Validate Project','validateProject','Tools'],['Run Visual QA Diff','runVisualDiff','QA'],
+    ['Export Preview','exportPreview','Export'],['Backup Project','backupProject','File']
   ];
   function showCommandPalette() { els.commandPalette.hidden = false; els.commandSearch.value=''; renderCommands(''); setTimeout(()=>els.commandSearch.focus(),20); }
   function hideCommandPalette() { els.commandPalette.hidden = true; }
@@ -1720,6 +1978,571 @@ import { createProjectSnapshot as createV7ProjectSnapshot, migrateProject as mig
       if (Number.isFinite(min) && Number.isFinite(max) && max > min * 3) add('warning', `Timeline clip ${clip.name} has large duration variance (${min}-${max}ms).`);
       if (!bad.length && clip.frames?.length) add('pass', `Timeline clip ${clip.name} is valid.`);
     }
+  }
+
+  // ===== Atlas Import Functions =====
+
+  async function importAtlasImage(file) {
+    if (!file) return;
+    try {
+      pushHistory();
+      const sourceData = await loadSourceImage(file);
+      state.source = { name: file.name, dataUrl: sourceData.dataUrl, width: sourceData.width, height: sourceData.height, image: sourceData.image };
+      state.atlasImport.sourceData = sourceData;
+      state.atlasImport.session = null;
+      state.atlasImport.selectedObjectIds = [];
+      syncToInputs();
+      setMode('atlas-import');
+      toast(`Loaded atlas ${file.name}. Choose a preset and run analysis.`, 'ok');
+    } catch (err) {
+      console.error(err);
+      toast(`Failed to load atlas: ${err.message}`, 'fail');
+    }
+  }
+
+  function runAtlasAnalysis() {
+    if (!state.atlasImport.sourceData) return toast('Load an atlas image first.', 'warn');
+    pushHistory();
+    const presetId = els.atlasPresetSelect?.value || 'manual_hybrid';
+    try {
+      const session = runAtlasPipeline(state.atlasImport.sourceData, presetId, {
+        tolerance: intVal(els.atlasToleranceInput, 16),
+        edgeFloodFill: els.atlasEdgeFloodInput?.checked ?? true
+      });
+      state.atlasImport.session = session;
+      state.atlasImport.selectedObjectIds = [];
+      renderAtlasImportUI();
+      draw();
+      toast(`Analysis complete: ${session.objects.length} objects detected.`, 'ok');
+    } catch (err) {
+      console.error(err);
+      toast(`Analysis failed: ${err.message}`, 'fail');
+    }
+  }
+
+  function toggleAtlasMask() { state.atlasImport.view.showMask = !state.atlasImport.view.showMask; draw(); }
+  function toggleAtlasBoxes() { state.atlasImport.view.showBoxes = !state.atlasImport.view.showBoxes; draw(); }
+  function toggleAtlasIgnored() { state.atlasImport.view.showIgnored = !state.atlasImport.view.showIgnored; draw(); }
+  function toggleAtlasOrigins() { state.atlasImport.view.showOrigins = !state.atlasImport.view.showOrigins; draw(); }
+
+  function atlasSelectObject(id, additive = false) {
+    if (additive) {
+      const idx = state.atlasImport.selectedObjectIds.indexOf(id);
+      if (idx >= 0) state.atlasImport.selectedObjectIds.splice(idx, 1);
+      else state.atlasImport.selectedObjectIds.push(id);
+    } else {
+      state.atlasImport.selectedObjectIds = [id];
+    }
+    renderAtlasImportUI();
+    draw();
+  }
+
+  function atlasIgnoreSelected() {
+    const session = state.atlasImport.session;
+    if (!session) return;
+    for (const id of state.atlasImport.selectedObjectIds) {
+      const obj = session.objects.find(o => o.id === id);
+      if (obj) obj.ignored = true;
+    }
+    renderAtlasImportUI();
+    draw();
+  }
+
+  function atlasUnignoreSelected() {
+    const session = state.atlasImport.session;
+    if (!session) return;
+    for (const id of state.atlasImport.selectedObjectIds) {
+      const obj = session.objects.find(o => o.id === id);
+      if (obj) obj.ignored = false;
+    }
+    renderAtlasImportUI();
+    draw();
+  }
+
+  function atlasClassifySelected() {
+    const session = state.atlasImport.session;
+    if (!session || !state.atlasImport.selectedObjectIds.length) return;
+    const classes = ['character_frame','projectile_fx','impact_fx','status_fx','cast_fx','portrait','mugshot','palette_strip','palette_variant_frame','text_label','annotation_arrow','divider_line','panel_border','section_box','unknown','ignored'];
+    const choice = prompt(`Classify selected object(s) as:\n${classes.join(', ')}`, 'character_frame');
+    if (!choice || !classes.includes(choice)) return toast('Invalid class.', 'warn');
+    for (const id of state.atlasImport.selectedObjectIds) {
+      const obj = session.objects.find(o => o.id === id);
+      if (obj) obj.class = choice;
+    }
+    renderAtlasImportUI();
+    draw();
+    toast(`Classified as ${choice}.`, 'ok');
+  }
+
+  function atlasMergeSelected() {
+    const session = state.atlasImport.session;
+    if (!session || state.atlasImport.selectedObjectIds.length < 2) return;
+    const selected = session.objects.filter(o => state.atlasImport.selectedObjectIds.includes(o.id) && !o.ignored);
+    if (selected.length < 2) return;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    let sumX = 0, sumY = 0, totalArea = 0;
+    for (const o of selected) {
+      const [x, y, w, h] = o.source_bbox;
+      if (x < minX) minX = x; if (y < minY) minY = y;
+      if (x + w > maxX) maxX = x + w; if (y + h > maxY) maxY = y + h;
+      sumX += o.centroid[0] * o.area; sumY += o.centroid[1] * o.area; totalArea += o.area;
+    }
+    const merged = createAtlasObject({
+      id: `obj_merged_${Date.now()}`,
+      class: selected[0].class,
+      source_bbox: [minX, minY, maxX - minX, maxY - minY],
+      trimmed_bbox: [minX, minY, maxX - minX, maxY - minY],
+      centroid: [Math.round(sumX / totalArea), Math.round(sumY / totalArea)],
+      area: totalArea,
+      confidence: 0.7,
+      entity_id: selected[0].entity_id,
+      animation_id: selected[0].animation_id,
+      frame_index: selected[0].frame_index,
+      origin: selected[0].origin,
+      baseline_y: selected[0].baseline_y
+    });
+    session.objects = session.objects.filter(o => !state.atlasImport.selectedObjectIds.includes(o.id));
+    session.objects.push(merged);
+    state.atlasImport.selectedObjectIds = [merged.id];
+    renderAtlasImportUI();
+    draw();
+    toast('Objects merged.', 'ok');
+  }
+
+  function atlasSetOrigin() {
+    const session = state.atlasImport.session;
+    if (!session) return;
+    state.atlasImport.tool = 'setOrigin';
+    toast('Click on canvas to set origin for selected objects.', 'ok');
+  }
+
+  function atlasSetBaseline() {
+    const session = state.atlasImport.session;
+    if (!session) return;
+    for (const id of state.atlasImport.selectedObjectIds) {
+      const obj = session.objects.find(o => o.id === id);
+      if (obj) obj.baseline_y = obj.source_bbox[3]; // default to bottom
+    }
+    draw();
+    toast('Baseline set to bottom of selected objects.', 'ok');
+  }
+
+  function atlasCreateEntity() {
+    const session = state.atlasImport.session;
+    if (!session) return;
+    const name = prompt('Entity name:', 'New Entity');
+    if (!name) return;
+    const entity = createEntity({ name });
+    session.entities.push(entity);
+    renderAtlasImportUI();
+  }
+
+  function atlasAssignEntity() {
+    const session = state.atlasImport.session;
+    if (!session || !session.entities.length) return toast('Create an entity first.', 'warn');
+    const entityId = prompt('Entity ID:', session.entities[0].id);
+    if (!entityId) return;
+    for (const id of state.atlasImport.selectedObjectIds) {
+      const obj = session.objects.find(o => o.id === id);
+      if (obj) obj.entity_id = entityId;
+    }
+    renderAtlasImportUI();
+    draw();
+  }
+
+  function atlasCreateAnimation() {
+    const session = state.atlasImport.session;
+    if (!session || !session.entities.length) return toast('Create an entity first.', 'warn');
+    const name = prompt('Animation name:', 'idle');
+    if (!name) return;
+    const entityId = session.entities[0].id;
+    const anim = createAnimation({ entity_id: entityId, name });
+    session.animations.push(anim);
+    renderAtlasImportUI();
+  }
+
+  function atlasAssignAnimation() {
+    const session = state.atlasImport.session;
+    if (!session || !session.animations.length) return toast('Create an animation first.', 'warn');
+    const animId = prompt('Animation ID:', session.animations[0].id);
+    if (!animId) return;
+    for (const id of state.atlasImport.selectedObjectIds) {
+      const obj = session.objects.find(o => o.id === id);
+      if (obj) obj.animation_id = animId;
+    }
+    renderAtlasImportUI();
+    draw();
+  }
+
+  function atlasDeleteFromSession() {
+    const session = state.atlasImport.session;
+    if (!session) return;
+    session.objects = session.objects.filter(o => !state.atlasImport.selectedObjectIds.includes(o.id));
+    state.atlasImport.selectedObjectIds = [];
+    renderAtlasImportUI();
+    draw();
+    toast('Removed from session.', 'ok');
+  }
+
+  async function exportAtlasTrimmed() {
+    const session = state.atlasImport.session;
+    if (!session || !state.source.image) return toast('No atlas session to export.', 'warn');
+    const files = await exportTrimmedFrames(session, state.source.image, { padding: intVal(els.atlasImportPaddingInput, 4) });
+    const unassigned = await exportUnassignedFrames(session, state.source.image, { padding: intVal(els.atlasImportPaddingInput, 4) });
+    files.push(...unassigned);
+    downloadBlob(createZip(files), 'atlas_trimmed_export.zip');
+    toast('Trimmed export complete.', 'ok');
+  }
+
+  async function exportAtlasNormalized() {
+    const session = state.atlasImport.session;
+    if (!session || !state.source.image) return toast('No atlas session to export.', 'warn');
+    const files = await exportNormalizedFrames(session, state.source.image, { padding: intVal(els.atlasImportPaddingInput, 4) });
+    downloadBlob(createZip(files), 'atlas_normalized_export.zip');
+    toast('Normalized export complete.', 'ok');
+  }
+
+  function exportAtlasMetadata() {
+    const session = state.atlasImport.session;
+    if (!session) return toast('No atlas session to export.', 'warn');
+    const meta = buildExportMetadata(session);
+    const atlasJson = buildAtlasJson(session);
+    const files = [
+      { name: 'metadata/import_session.json', data: textBytes(pretty(meta)) },
+      { name: 'metadata/atlas.json', data: textBytes(pretty(atlasJson)) },
+      { name: 'metadata/objects.json', data: textBytes(pretty({ objects: meta.objects })) },
+      { name: 'metadata/animations.json', data: textBytes(pretty({ animations: meta.animations })) }
+    ];
+    downloadBlob(createZip(files), 'atlas_metadata_export.zip');
+    toast('Metadata export complete.', 'ok');
+  }
+
+  async function exportAtlasEngine() {
+    const session = state.atlasImport.session;
+    if (!session) return toast('No atlas session to export.', 'warn');
+    const engine = els.atlasEngineSelect?.value || 'godot';
+    let data, filename;
+    switch (engine) {
+      case 'godot':
+        data = buildGodotSpriteFrames(session);
+        filename = 'godot_sprite_frames.json';
+        break;
+      case 'unity':
+        data = buildUnitySpriteMeta(session);
+        filename = 'unity_sprite_meta.json';
+        break;
+      case 'aseprite':
+        data = buildAsepriteJson(session);
+        filename = 'aseprite.json';
+        break;
+      case 'texture-packer':
+        data = buildTexturePackerJson(session);
+        filename = 'texture_packer.json';
+        break;
+      case 'keter':
+        data = buildKeterAtlasJson(session);
+        filename = 'keter_atlas.json';
+        break;
+      case 'rpg-maker':
+        if (!state.source.image) return toast('No source image for RPG Maker export.', 'warn');
+        const result = buildRpgMakerSheet(session, state.source.image);
+        const files = [];
+        for (const sheet of result.sheets) {
+          const blob = await (await fetch(sheet.dataUrl)).blob();
+          files.push({ name: `rpg_maker_mz/${sheet.name}`, data: new Uint8Array(await blob.arrayBuffer()) });
+        }
+        files.push({ name: 'rpg_maker_mz/notes.json', data: textBytes(pretty({ cellW: result.cellW, cellH: result.cellH, cols: result.cols, rows: result.rows, sheets: result.sheets.map(s => ({ name: s.name, notes: s.notes })) })) });
+        downloadBlob(createZip(files), 'rpg_maker_export.zip');
+        toast('RPG Maker export complete.', 'ok');
+        return;
+      default:
+        return toast('Unknown engine target.', 'warn');
+    }
+    downloadJson(filename, data);
+    toast(`${engine} export complete.`, 'ok');
+  }
+
+  function renderAtlasImportUI() {
+    if (!els.atlasPresetSelect) return;
+    // Init preset select once
+    if (!els.atlasPresetSelect.dataset.inited) {
+      els.atlasPresetSelect.innerHTML = presetIds().map(id => {
+        const p = getPreset(id);
+        return `<option value="${id}">${p.name}</option>`;
+      }).join('');
+      els.atlasPresetSelect.dataset.inited = '1';
+    }
+
+    const session = state.atlasImport.session;
+    if (!session) {
+      if (els.atlasAnalysisSummary) els.atlasAnalysisSummary.textContent = 'No analysis yet.';
+      if (els.atlasObjectList) els.atlasObjectList.innerHTML = '';
+      if (els.atlasEntityList) els.atlasEntityList.innerHTML = '';
+      return;
+    }
+
+    if (els.atlasAnalysisSummary) {
+      const bg = session.analysis.background;
+      els.atlasAnalysisSummary.innerHTML = `<div>Type: <strong>${session.analysis.sheet_type}</strong></div>
+        <div>Objects: <strong>${session.objects.length}</strong></div>
+        <div>Background: <strong>${bg.mode}</strong> (${bg.color?.join(',')})</div>
+        <div>Tolerance: <strong>${bg.tolerance}</strong> | Flood: <strong>${bg.edge_flood_fill}</strong></div>`;
+    }
+
+    if (els.atlasObjectList) {
+      const objs = session.objects;
+      els.atlasObjectList.innerHTML = objs.map(o => {
+        const active = state.atlasImport.selectedObjectIds.includes(o.id) ? ' active' : '';
+        const ignored = o.ignored ? ' (ignored)' : '';
+        return `<div class="object-row${active}" data-atlas-obj="${o.id}"><div class="object-main"><strong>${o.class}</strong><span>${o.width}×${o.height} | ${o.area}px${ignored}</span></div></div>`;
+      }).join('') || '<span class="muted">No objects detected.</span>';
+      wireAtlasObjectRows();
+    }
+
+    if (els.atlasEntityList) {
+      const ents = session.entities || [];
+      const anims = session.animations || [];
+      let html = '';
+      for (const e of ents) {
+        html += `<div class="object-row"><div class="object-main"><strong>${escapeHtml(e.name)}</strong><span>${e.id}</span></div></div>`;
+        const myAnims = anims.filter(a => a.entity_id === e.id);
+        for (const a of myAnims) {
+          html += `<div class="object-row" style="padding-left:1.5rem"><div class="object-main"><span>${escapeHtml(a.name)}</span><span>${a.frames.length} frames</span></div></div>`;
+        }
+      }
+      els.atlasEntityList.innerHTML = html || '<span class="muted">No entities.</span>';
+    }
+    renderAtlasFrameOrder();
+  }
+
+  function wireAtlasObjectRows() {
+    if (!els.atlasObjectList) return;
+    els.atlasObjectList.querySelectorAll('[data-atlas-obj]').forEach(row => {
+      row.addEventListener('click', e => {
+        const id = row.dataset.atlasObj;
+        atlasSelectObject(id, e.ctrlKey || e.metaKey);
+      });
+    });
+  }
+
+  function drawAtlasImportOverlays(ctx, z) {
+    const session = state.atlasImport.session;
+    if (!session) return;
+
+    // Draw redetect region drag preview
+    if (state.atlasImport.drag?.type === 'redetectRegion') {
+      const r = rectFromPoints(state.atlasImport.drag.start, state.atlasImport.drag.current);
+      ctx.save(); ctx.setLineDash([5, 4]); ctx.strokeStyle = '#fbbf24'; ctx.strokeRect(r.x * z, r.y * z, r.w * z, r.h * z); ctx.restore();
+    }
+
+    // Draw mask overlay
+    if (state.atlasImport.view.showMask && session.mask) {
+      const mask = new Uint8Array(session.mask);
+      const w = session.source.width;
+      const h = session.source.height;
+      ctx.save();
+      ctx.fillStyle = 'rgba(255,0,0,0.15)';
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          if (mask[y * w + x]) {
+            ctx.fillRect(x * z, y * z, z, z);
+          }
+        }
+      }
+      ctx.restore();
+    }
+
+    // Draw object boxes
+    if (state.atlasImport.view.showBoxes) {
+      for (const obj of session.objects) {
+        if (!state.atlasImport.view.showIgnored && obj.ignored) continue;
+        const [x, y, w, h] = obj.source_bbox;
+        const selected = state.atlasImport.selectedObjectIds.includes(obj.id);
+        ctx.save();
+        ctx.strokeStyle = selected ? '#fbbf24' : (obj.ignored ? 'rgba(150,150,150,0.5)' : '#34d399');
+        ctx.lineWidth = selected ? 2 : 1;
+        ctx.strokeRect(x * z, y * z, w * z, h * z);
+        if (selected || state.atlasImport.view.showLabels) {
+          ctx.fillStyle = selected ? '#fbbf24' : '#34d399';
+          ctx.font = `${Math.max(9, 9 * z)}px sans-serif`;
+          ctx.fillText(`${obj.class} ${obj.frame_index >= 0 ? obj.frame_index : ''}`, x * z + 2, y * z - 2);
+        }
+        // Draw resize handles for selected objects
+        if (selected) {
+          ctx.fillStyle = '#fbbf24';
+          const handles = [
+            [x, y], [x + w / 2, y], [x + w, y],
+            [x, y + h / 2], [x + w, y + h / 2],
+            [x, y + h], [x + w / 2, y + h], [x + w, y + h]
+          ];
+          for (const [hx, hy] of handles) {
+            const s = Math.max(4, 4 * z);
+            ctx.fillRect(hx * z - s / 2, hy * z - s / 2, s, s);
+          }
+        }
+        ctx.restore();
+      }
+    }
+
+    // Draw origins
+    if (state.atlasImport.view.showOrigins) {
+      for (const obj of session.objects) {
+        if (obj.ignored) continue;
+        const [x, y, w, h] = obj.source_bbox;
+        const [ox, oy] = obj.origin || [Math.floor(w / 2), h];
+        const cx = (x + ox) * z;
+        const cy = (y + oy) * z;
+        ctx.save();
+        ctx.strokeStyle = '#a78bfa';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(cx - 6, cy); ctx.lineTo(cx + 6, cy); ctx.moveTo(cx, cy - 6); ctx.lineTo(cx, cy + 6); ctx.stroke();
+        ctx.restore();
+      }
+    }
+  }
+
+  function atlasHitTestHandle(bbox, pt) {
+    const [x, y, w, h] = bbox;
+    const handles = [
+      { name: 'nw', x: x, y: y },
+      { name: 'n', x: x + w / 2, y: y },
+      { name: 'ne', x: x + w, y: y },
+      { name: 'w', x: x, y: y + h / 2 },
+      { name: 'e', x: x + w, y: y + h / 2 },
+      { name: 'sw', x: x, y: y + h },
+      { name: 's', x: x + w / 2, y: y + h },
+      { name: 'se', x: x + w, y: y + h }
+    ];
+    const threshold = 6 / state.view.zoom;
+    for (const h of handles) {
+      if (Math.abs(pt.x - h.x) <= threshold && Math.abs(pt.y - h.y) <= threshold) return h.name;
+    }
+    return null;
+  }
+
+  function runAtlasRedetectInRegion(rect) {
+    if (!state.atlasImport.sourceData || !state.atlasImport.session) return;
+    pushHistory();
+    const presetId = state.atlasImport.preset || 'manual_hybrid';
+    const newObjects = reanalyzeRegion(state.atlasImport.session, state.atlasImport.sourceData, [rect.x, rect.y, rect.w, rect.h], presetId);
+    // Merge new objects into session with unique IDs
+    for (const obj of newObjects) {
+      obj.id = `obj_reg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      state.atlasImport.session.objects.push(obj);
+    }
+    renderAtlasImportUI();
+    draw();
+    toast(`Redetected ${newObjects.length} objects in region.`, 'ok');
+  }
+
+  // ===== Atlas Animation Preview =====
+  let atlasPreviewTimer = null;
+  let atlasPreviewFrameIndex = 0;
+
+  function playAtlasPreview() {
+    pauseAtlasPreview();
+    const session = state.atlasImport.session;
+    if (!session || !session.animations.length) return;
+    // Use first animation that has selected objects, or first animation
+    let anim = session.animations.find(a => state.atlasImport.selectedObjectIds.some(id => a.frames.includes(id)));
+    if (!anim) anim = session.animations[0];
+    state.atlasImport.previewAnimId = anim.id;
+    atlasPreviewFrameIndex = 0;
+    const fps = anim.fps || 8;
+    atlasPreviewTimer = setInterval(() => renderAtlasPreviewFrame(anim), 1000 / fps);
+    renderAtlasPreviewFrame(anim);
+  }
+
+  function pauseAtlasPreview() {
+    if (atlasPreviewTimer) { clearInterval(atlasPreviewTimer); atlasPreviewTimer = null; }
+  }
+
+  function renderAtlasPreviewFrame(anim) {
+    const canvas = els.atlasPreviewCanvas;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const session = state.atlasImport.session;
+    if (!session || !anim.frames.length) return;
+    const objId = anim.frames[atlasPreviewFrameIndex];
+    const obj = session.objects.find(o => o.id === objId);
+    if (!obj || !state.source.image) { ctx.clearRect(0, 0, canvas.width, canvas.height); return; }
+    const [sx, sy, sw, sh] = obj.trimmed_bbox;
+    const scale = Math.min(canvas.width / sw, canvas.height / sh, 4);
+    const dw = sw * scale, dh = sh * scale;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#0b111c'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(state.source.image, sx, sy, sw, sh, (canvas.width - dw) / 2, (canvas.height - dh) / 2, dw, dh);
+    atlasPreviewFrameIndex = (atlasPreviewFrameIndex + 1) % anim.frames.length;
+  }
+
+  // ===== Atlas Frame Reordering =====
+  function renderAtlasFrameOrder() {
+    if (!els.atlasFrameOrderList) return;
+    const session = state.atlasImport.session;
+    if (!session || !session.animations.length) { els.atlasFrameOrderList.innerHTML = '<span class="muted">Select an animation to reorder frames.</span>'; return; }
+    // Show frames for the first animation that contains selected objects, or first animation
+    let anim = session.animations.find(a => state.atlasImport.selectedObjectIds.some(id => a.frames.includes(id)));
+    if (!anim) anim = session.animations[0];
+    els.atlasFrameOrderList.innerHTML = anim.frames.map((fid, idx) => {
+      const obj = session.objects.find(o => o.id === fid);
+      const label = obj ? `${obj.class} ${obj.width}×${obj.height}` : fid;
+      return `<div class="object-row" draggable="true" data-frame-idx="${idx}" data-anim-id="${anim.id}">
+        <div class="object-main"><span>${String(idx).padStart(2, '0')}:</span><strong>${escapeHtml(label)}</strong></div>
+        <div class="object-actions">
+          <button data-action="atlasMoveFrameUp" data-frame-idx="${idx}" data-anim-id="${anim.id}" ${idx === 0 ? 'disabled' : ''}>▲</button>
+          <button data-action="atlasMoveFrameDown" data-frame-idx="${idx}" data-anim-id="${anim.id}" ${idx === anim.frames.length - 1 ? 'disabled' : ''}>▼</button>
+        </div>
+      </div>`;
+    }).join('');
+    wireAtlasFrameOrderRows();
+  }
+
+  function wireAtlasFrameOrderRows() {
+    if (!els.atlasFrameOrderList) return;
+    els.atlasFrameOrderList.querySelectorAll('[data-action="atlasMoveFrameUp"]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = Number(btn.dataset.frameIdx);
+        const animId = btn.dataset.animId;
+        atlasSwapFrame(animId, idx, idx - 1);
+      });
+    });
+    els.atlasFrameOrderList.querySelectorAll('[data-action="atlasMoveFrameDown"]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = Number(btn.dataset.frameIdx);
+        const animId = btn.dataset.animId;
+        atlasSwapFrame(animId, idx, idx + 1);
+      });
+    });
+    // Drag and drop
+    let dragIdx = null;
+    els.atlasFrameOrderList.querySelectorAll('[draggable="true"]').forEach(row => {
+      row.addEventListener('dragstart', e => { dragIdx = Number(row.dataset.frameIdx); e.dataTransfer.effectAllowed = 'move'; });
+      row.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; });
+      row.addEventListener('drop', e => {
+        e.preventDefault();
+        const dropIdx = Number(row.dataset.frameIdx);
+        const animId = row.dataset.animId;
+        if (dragIdx !== null && dragIdx !== dropIdx) atlasSwapFrame(animId, dragIdx, dropIdx);
+        dragIdx = null;
+      });
+    });
+  }
+
+  function atlasSwapFrame(animId, fromIdx, toIdx) {
+    const session = state.atlasImport.session;
+    if (!session) return;
+    const anim = session.animations.find(a => a.id === animId);
+    if (!anim || fromIdx < 0 || toIdx < 0 || fromIdx >= anim.frames.length || toIdx >= anim.frames.length) return;
+    const [moved] = anim.frames.splice(fromIdx, 1);
+    anim.frames.splice(toIdx, 0, moved);
+    // Update frame_index on objects
+    for (let i = 0; i < anim.frames.length; i++) {
+      const obj = session.objects.find(o => o.id === anim.frames[i]);
+      if (obj) obj.frame_index = i;
+    }
+    renderAtlasFrameOrder();
+    draw();
   }
 
 })();

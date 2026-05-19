@@ -13,6 +13,7 @@
   <input id="batchInput" type="file" accept="image/png,image/webp,image/jpeg" multiple hidden />
   <input id="libraryImportInput" type="file" accept="application/json,.json" hidden />
   <input id="assetPackInput" type="file" accept="image/png,image/webp,image/jpeg,application/json,.json,text/csv,.csv" multiple hidden />
+  <input id="atlasImportInput" type="file" accept="image/png,image/gif" hidden />
 
   <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
   <div id="toastStack" class="toast-stack" aria-live="polite"></div>
@@ -37,6 +38,7 @@
       <div class="menu" tabindex="0"><button class="menu-button">File</button><div class="menu-popover">
         <button data-action="newProject" data-tip="Start a clean v6 project. This clears current source, parts, recipe, batch jobs, and diagnostics but keeps your local asset library.">New Project</button>
         <button data-action="openImage" data-tip="Import the source spritesheet. PNG is preferred because transparency is preserved.">Import Spritesheet…</button>
+        <button data-action="openAtlasImport" data-tip="Import a sprite atlas, fighting-game sheet, JRPG sheet, or compilation sheet with automatic detection.">Import Atlas…</button>
         <button data-action="openProject" data-tip="Open a .spriteproject.json file. V4/V5/V6 projects can restore source image data, grid settings, parts, pivots, recipes, QA gates, and profiles.">Open Project…</button>
         <button data-action="saveProject" data-tip="Download the current project as a versioned .spriteproject.json file with embedded source image data if enabled.">Save Project</button>
         <button data-action="recoverAutosave" data-tip="Recover the latest autosaved v6 project stored in this browser.">Recover Autosave</button>
@@ -71,6 +73,36 @@
         <button data-action="normalizeTransparency" data-tip="Turn low-alpha edge junk into full transparency. Use this after AI-generated or compressed art.">Normalize Transparency</button>
       </div></div>
 
+      <div class="menu" tabindex="0"><button class="menu-button">Atlas</button><div class="menu-popover">
+        <button data-action="showAtlasImport" data-tip="Open Atlas Import mode for sprite atlases, fighting-game sheets, JRPG sheets, and compilation sheets.">Atlas Import Mode</button>
+        <button data-action="runAtlasAnalysis" data-tip="Run automatic detection on the current atlas with the selected preset.">Run Analysis</button>
+        <hr />
+        <button data-action="toggleAtlasMask" data-tip="Show or hide the background mask overlay.">Toggle Mask</button>
+        <button data-action="toggleAtlasBoxes" data-tip="Show or hide detected object bounding boxes.">Toggle Boxes</button>
+        <button data-action="toggleAtlasIgnored" data-tip="Show or hide ignored objects on the canvas.">Toggle Ignored</button>
+        <button data-action="toggleAtlasOrigins" data-tip="Show or hide origin point markers.">Toggle Origins</button>
+        <hr />
+        <button data-action="atlasSetOrigin" data-tip="Click on the canvas to place the origin point for selected objects.">Set Origin</button>
+        <button data-action="atlasSetBaseline" data-tip="Set the baseline to the bottom of selected objects.">Set Baseline</button>
+        <button data-action="atlasMergeSelected" data-tip="Merge the currently selected objects into one bounding box.">Merge Selected</button>
+        <button data-action="atlasIgnoreSelected" data-tip="Mark selected objects as ignored so they are excluded from export.">Ignore Selected</button>
+        <button data-action="atlasUnignoreSelected" data-tip="Restore ignored selected objects back to active export.">Unignore Selected</button>
+        <button data-action="atlasClassifySelected" data-tip="Change the classification class of selected objects.">Classify Selected</button>
+        <button data-action="atlasRedetectRegion" data-tip="Drag a rectangle on the canvas to re-run detection inside that region only.">Re-detect Region</button>
+        <hr />
+        <button data-action="atlasCreateEntity" data-tip="Create a new entity and assign selected objects to it.">Create Entity</button>
+        <button data-action="atlasAssignEntity" data-tip="Assign selected objects to an existing entity.">Assign Entity</button>
+        <button data-action="atlasCreateAnimation" data-tip="Create a new animation and assign selected objects to it.">Create Animation</button>
+        <button data-action="atlasAssignAnimation" data-tip="Assign selected objects to an existing animation.">Assign Animation</button>
+        <hr />
+        <button data-action="playAtlasPreview" data-tip="Play the animation preview for the current animation.">Play Preview</button>
+        <button data-action="pauseAtlasPreview" data-tip="Pause the animation preview.">Pause Preview</button>
+        <hr />
+        <button data-action="exportAtlasTrimmed" data-tip="Export trimmed frames as PNG files in a ZIP.">Export Trimmed</button>
+        <button data-action="exportAtlasNormalized" data-tip="Export normalized frames with shared canvas per animation.">Export Normalized</button>
+        <button data-action="exportAtlasMetadata" data-tip="Export import session metadata, objects, animations, and atlas JSON.">Export Metadata</button>
+        <button data-action="exportAtlasEngine" data-tip="Export engine-specific JSON for Godot, Unity, Aseprite, TexturePacker, KeterEngine, or RPG Maker.">Export Engine JSON</button>
+      </div></div>
       <div class="menu" tabindex="0"><button class="menu-button">Animation Lab</button><div class="menu-popover">
         <button data-action="showTimelineLab" data-tip="Open Timeline mode. Use this for named clips, per-frame duration notes, and onion-skin review.">Timeline Lab</button>
         <button data-action="buildTimelineClipFromRow" data-tip="Create a reusable clip from the selected animation row. Use this before exporting runtime bundles.">Add Row Clip</button>
@@ -164,6 +196,7 @@
         <button class="mode-button compact" data-mode="pose" data-tip="Pose mode: save simple rig-part pose tests to check pivots, seams, and underlap padding.">Pose</button>
         <button class="mode-button compact" data-mode="remap" data-tip="Remap mode: convert the current sheet plan into Godot, RPG Maker, LPC, Keter, or generic layouts.">Remap</button>
         <button class="mode-button compact" data-mode="atlas" data-tip="Atlas mode: generate a runtime atlas manifest and bundle metadata for engines.">Atlas</button>
+        <button class="mode-button compact" data-mode="atlas-import" data-tip="Atlas Import mode: auto-detect and manually correct sprite atlases, fighting-game sheets, JRPG sheets, and compilation sheets.">Atlas Import</button>
         <button class="mode-button compact" data-mode="plugins" data-tip="Plugins mode: manage importers, exporters, validators, batch steps, and project migration hooks.">Plugins</button>
       </details>
     </aside>
@@ -348,6 +381,78 @@
         <div id="batchList" class="object-list"></div>
         <h4>Batch Logs</h4>
         <div id="batchLogList" class="diagnostics-list"></div>
+      </section>
+
+      <section class="panel" data-panel="atlas-import">
+        <h3>Atlas Import</h3>
+        <div class="button-row"><button data-action="openAtlasImport">Import Atlas…</button><button data-action="runAtlasAnalysis">Run Analysis</button></div>
+        <label data-tip="Import preset for automatic detection.">Preset <select id="atlasPresetSelect"></select></label>
+        <label data-tip="Detected or selected background removal mode.">Background Mode <span id="atlasBgMode">unknown</span></label>
+        <div class="grid-two">
+          <label data-tip="Color tolerance for background removal.">Tolerance <input id="atlasToleranceInput" type="number" min="0" max="128" value="16" /></label>
+          <label data-tip="Crop padding around detected objects.">Padding <input id="atlasImportPaddingInput" type="number" min="0" max="32" value="4" /></label>
+        </div>
+        <label class="checkbox" data-tip="Use edge-connected flood fill for chroma removal instead of global deletion."><input id="atlasEdgeFloodInput" type="checkbox" checked /> Edge flood fill</label>
+        <h4>Analysis</h4>
+        <div id="atlasAnalysisSummary" class="code-preview">No analysis yet.</div>
+        <h4>Overlays</h4>
+        <div class="button-row">
+          <button data-action="toggleAtlasMask">Mask</button>
+          <button data-action="toggleAtlasBoxes">Boxes</button>
+          <button data-action="toggleAtlasIgnored">Ignored</button>
+          <button data-action="toggleAtlasOrigins">Origins</button>
+        </div>
+        <h4>Detected Objects</h4>
+        <div id="atlasObjectList" class="object-list"></div>
+        <h4>Entities &amp; Animations</h4>
+        <div id="atlasEntityList" class="object-list"></div>
+        <h4>Manual Tools</h4>
+        <div class="button-row">
+          <button data-action="atlasSetOrigin">Set Origin (O)</button>
+          <button data-action="atlasSetBaseline">Set Baseline (B)</button>
+          <button data-action="atlasMergeSelected">Merge (M)</button>
+        </div>
+        <div class="button-row">
+          <button data-action="atlasIgnoreSelected">Ignore (I)</button>
+          <button data-action="atlasUnignoreSelected">Unignore (U)</button>
+          <button data-action="atlasClassifySelected">Classify (C)</button>
+        </div>
+        <div class="button-row">
+          <button data-action="atlasRedetectRegion">Re-detect Region</button>
+        </div>
+        <h4>Entity &amp; Animation</h4>
+        <div class="button-row">
+          <button data-action="atlasCreateEntity">Create Entity (E)</button>
+          <button data-action="atlasAssignEntity">Assign Entity</button>
+        </div>
+        <div class="button-row">
+          <button data-action="atlasCreateAnimation">Create Animation (A)</button>
+          <button data-action="atlasAssignAnimation">Assign Animation</button>
+        </div>
+        <h4>Animation Preview</h4>
+        <canvas id="atlasPreviewCanvas" width="160" height="160"></canvas>
+        <div class="button-row">
+          <button data-action="playAtlasPreview">Play</button>
+          <button data-action="pauseAtlasPreview">Pause</button>
+        </div>
+        <h4>Frame Order</h4>
+        <div id="atlasFrameOrderList" class="object-list"></div>
+        <h4>Engine Export</h4>
+        <label>Target <select id="atlasEngineSelect">
+          <option value="godot">Godot SpriteFrames</option>
+          <option value="unity">Unity 2D</option>
+          <option value="aseprite">Aseprite JSON</option>
+          <option value="texture-packer">TexturePacker JSON</option>
+          <option value="keter">MonoGame / KeterEngine</option>
+          <option value="rpg-maker">RPG Maker MZ</option>
+        </select></label>
+        <div class="button-row"><button data-action="exportAtlasEngine">Export Engine JSON</button></div>
+        <h4>Export</h4>
+        <div class="button-row">
+          <button data-action="exportAtlasTrimmed">Trimmed</button>
+          <button data-action="exportAtlasNormalized">Normalized</button>
+          <button data-action="exportAtlasMetadata">Metadata</button>
+        </div>
       </section>
 
       <section class="panel" data-panel="plugins">

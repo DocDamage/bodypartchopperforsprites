@@ -1,6 +1,7 @@
 export const BUILTIN_PLUGINS = Object.freeze([
   { id: 'importer.generic_spritesheet', type: 'importer', version: '1.0.0', name: 'Generic Spritesheet Importer', description: 'Imports PNG, WebP, or JPEG spritesheets and applies grid detection.' },
   { id: 'importer.asset_pack', type: 'importer', version: '1.0.0', name: 'Asset Pack Importer', description: 'Ingests groups of PNG assets plus optional metadata JSON and credits CSV.' },
+  { id: 'importer.atlas', type: 'importer', version: '1.0.0', name: 'Fighting / JRPG Atlas Importer', description: 'Imports irregular sprite atlases, fighting-game sheets, JRPG tiny sheets, and compilation reference sheets with automatic detection and manual correction.' },
   { id: 'exporter.generic_png_json', type: 'exporter', version: '1.0.0', name: 'Generic PNG + JSON Exporter', description: 'Exports sliced PNG frames and a generic manifest.' },
   { id: 'exporter.godot4', type: 'exporter', version: '1.0.0', name: 'Godot 4 Exporter', description: 'Generates Godot-friendly folders, animation JSON, and pivot metadata.' },
   { id: 'exporter.unity2d', type: 'exporter', version: '1.0.0', name: 'Unity 2D Exporter', description: 'Generates Unity-friendly sliced frame structure and normalized pivot hints.' },
